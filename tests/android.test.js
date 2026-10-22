@@ -118,9 +118,38 @@ async function runTests() {
       assert.ok(content.includes('android.intent.category.LAUNCHER'));
       assert.ok(content.includes('android.permission.RECORD_AUDIO'), 'Must declare RECORD_AUDIO for voice notes');
       assert.ok(content.includes('text/*'), 'Must declare text/* mimeType data tag');
+
+      // Check Fullscreen ImageViewerActivity & FileProvider
+      assert.ok(content.includes('ImageViewerActivity'), 'Must declare ImageViewerActivity in manifest');
+      assert.ok(content.includes('androidx.core.content.FileProvider'), 'Must declare FileProvider in manifest');
+      const filePathsXml = path.join(__dirname, '../android/app/src/main/res/xml/file_paths.xml');
+      assert.ok(fs.existsSync(filePathsXml), 'file_paths.xml must exist for FileProvider');
     });
 
-    // 7. Voice Note Layout & MessageAdapter Support
+    // 7. Interactive Image Viewer and Lightbox Support
+    await test('Interactive full-screen ImageViewerActivity exists with zoom, save, and share actions', async () => {
+      const viewerActivityPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/ui/ImageViewerActivity.kt');
+      assert.ok(fs.existsSync(viewerActivityPath), 'ImageViewerActivity.kt must exist');
+      const viewerCode = fs.readFileSync(viewerActivityPath, 'utf8');
+      assert.ok(viewerCode.includes('setupInteractiveZoom'), 'Must support interactive zoom/pinch gesture');
+      assert.ok(viewerCode.includes('openInExternalGallery'), 'Must support opening image in device gallery');
+      assert.ok(viewerCode.includes('saveImageToGallery'), 'Must support saving image to device Pictures');
+      assert.ok(viewerCode.includes('shareImage'), 'Must support sharing image via Android Share Sheet');
+
+      const viewerLayoutPath = path.join(__dirname, '../android/app/src/main/res/layout/activity_image_viewer.xml');
+      assert.ok(fs.existsSync(viewerLayoutPath), 'activity_image_viewer.xml layout must exist');
+      const layoutCode = fs.readFileSync(viewerLayoutPath, 'utf8');
+      assert.ok(layoutCode.includes('ivFullPreview'), 'Layout must have ivFullPreview');
+      assert.ok(layoutCode.includes('btnViewerOpenExternal'), 'Layout must have gallery button');
+      assert.ok(layoutCode.includes('btnViewerSave'), 'Layout must have save button');
+      assert.ok(layoutCode.includes('btnViewerShare'), 'Layout must have share button');
+
+      const adapterPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/ui/MessageAdapter.kt');
+      const adapterCode = fs.readFileSync(adapterPath, 'utf8');
+      assert.ok(adapterCode.includes('ImageViewerActivity::class.java'), 'MessageAdapter must launch ImageViewerActivity on image tap');
+    });
+
+    // 8. Voice Note Layout & MessageAdapter Support
     await test('Voice note layout exists and MessageAdapter supports voice messages', async () => {
       const voiceLayoutPath = path.join(__dirname, '../android/app/src/main/res/layout/item_message_voice.xml');
       assert.ok(fs.existsSync(voiceLayoutPath), 'item_message_voice.xml must exist');

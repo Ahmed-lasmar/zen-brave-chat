@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/llLinkRow"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -64,16 +65,17 @@
             android:textColor="@color/text_muted"
             android:textSize="11sp" />
 
-        <Button
+        <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btnOpenLink"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_height="36dp"
             android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_secondary"
-            android:paddingHorizontal="12dp"
+            android:background="@drawable/bg_btn_primary"
+            android:paddingHorizontal="14dp"
             android:text="Open in Browser ↗"
             android:textAllCaps="false"
-            android:textColor="@color/accent_purple"
-            android:textSize="11sp" />
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:textStyle="bold" />
     </LinearLayout>
 </LinearLayout>

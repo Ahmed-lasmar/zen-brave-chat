@@ -59,6 +59,24 @@
             </intent-filter>
         </activity>
 
+        <!-- Fullscreen Interactive Image Viewer & Lightbox -->
+        <activity
+            android:name=".ui.ImageViewerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ZenBrave.FullscreenViewer"
+            android:configChanges="orientation|screenSize|screenLayout" />
+
+        <!-- FileProvider for Sharing and Opening with External Apps -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>

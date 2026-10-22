@@ -145,10 +145,10 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
             put("id", msg.id)
             put("type", msg.type)
             put("text", msg.text)
-            put("url", msg.url)
-            put("title", msg.title)
-            put("domain", msg.domain)
-            put("favIconUrl", msg.favIconUrl)
+            if (!msg.url.isNullOrEmpty()) put("url", msg.url)
+            if (!msg.title.isNullOrEmpty()) put("title", msg.title)
+            if (!msg.domain.isNullOrEmpty()) put("domain", msg.domain)
+            if (!msg.favIconUrl.isNullOrEmpty()) put("favIconUrl", msg.favIconUrl)
 
             if (msg.type == "link" && msg.url != null) {
                 val linkObj = JSONObject().apply {
@@ -300,43 +300,54 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
         }
     }
 
+    private fun JSONObject.optCleanString(name: String, fallback: String? = null): String? {
+        if (isNull(name) || !has(name)) return fallback
+        val value = optString(name, "")
+        if (value.isEmpty() || value.equals("null", ignoreCase = true)) return fallback
+        return value
+    }
+
     private fun parseChatMessage(obj: JSONObject, myPeerId: String): ChatMessage {
-        val sId = obj.optString("senderId")
+        val sId = obj.optCleanString("senderId") ?: ""
         val mediaObj = obj.optJSONObject("media")
         val media = if (mediaObj != null) {
             MediaPayload(
-                type = mediaObj.optString("type", "image"),
-                mimeType = mediaObj.optString("mimeType", "image/jpeg"),
-                data = mediaObj.optString("data", ""),
-                name = mediaObj.optString("name", "image.jpg")
+                type = mediaObj.optCleanString("type") ?: "image",
+                mimeType = mediaObj.optCleanString("mimeType") ?: "image/jpeg",
+                data = mediaObj.optCleanString("data") ?: "",
+                name = mediaObj.optCleanString("name") ?: "image.jpg"
             )
         } else null
 
         val linkObj = obj.optJSONObject("link")
-        val url = obj.optString("url", linkObj?.optString("url") ?: "").ifEmpty { null }
-        val title = obj.optString("title", linkObj?.optString("title") ?: "").ifEmpty { null }
-        val domain = obj.optString("domain", linkObj?.optString("domain") ?: "").ifEmpty { null }
-        val rawType = obj.optString("type")
+        val url = obj.optCleanString("url", linkObj?.optCleanString("url"))
+        val title = obj.optCleanString("title", linkObj?.optCleanString("title"))
+        val domain = obj.optCleanString("domain", linkObj?.optCleanString("domain"))
+        val rawType = obj.optCleanString("type") ?: ""
         val finalType = when {
             rawType == "voice" || media?.type == "voice" -> "voice"
-            rawType.isNotEmpty() -> rawType
+            rawType == "image" || (media != null && media.type == "image") -> "image"
+            rawType == "link" && url != null -> "link"
             url != null -> "link"
             media != null -> "image"
+            rawType.isNotEmpty() && rawType != "link" -> rawType
             else -> "text"
         }
 
+        val text = obj.optCleanString("text") ?: ""
+
         return ChatMessage(
-            id = obj.optString("id", "msg-${System.currentTimeMillis()}"),
+            id = obj.optCleanString("id") ?: "msg-${System.currentTimeMillis()}",
             type = finalType,
-            text = obj.optString("text", ""),
+            text = text,
             url = url,
             title = title,
             domain = domain,
-            favIconUrl = obj.optString("favIconUrl", linkObj?.optString("favIconUrl") ?: "").ifEmpty { null },
+            favIconUrl = obj.optCleanString("favIconUrl", linkObj?.optCleanString("favIconUrl")),
             media = media,
             senderId = sId,
-            senderName = obj.optString("senderName", "Friend"),
-            browser = obj.optString("browser", "Browser"),
+            senderName = obj.optCleanString("senderName") ?: "Friend",
+            browser = obj.optCleanString("browser") ?: "Browser",
             timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
             isOutgoing = sId == myPeerId
         )

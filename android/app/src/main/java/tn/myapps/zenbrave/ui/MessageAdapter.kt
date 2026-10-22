@@ -127,21 +127,35 @@ class MessageAdapter(
         private val tvDomain: TextView = itemView.findViewById(R.id.tvLinkDomain)
         private val tvTitle: TextView = itemView.findViewById(R.id.tvLinkTitle)
         private val tvUrl: TextView = itemView.findViewById(R.id.tvLinkUrl)
-        private val btnOpen: Button = itemView.findViewById(R.id.btnOpenLink)
+        private val btnOpen: View = itemView.findViewById(R.id.btnOpenLink)
 
         fun bind(msg: ChatMessage) {
             row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
             tvSender.text = if (msg.isOutgoing) "You" else "${msg.senderName} (${msg.browser})"
-            tvDomain.text = msg.domain ?: "WEB"
-            tvTitle.text = msg.title ?: msg.url ?: "Link"
-            tvUrl.text = msg.url ?: ""
+
+            val cleanDomain = if (msg.domain.isNullOrEmpty() || msg.domain.equals("null", ignoreCase = true)) null else msg.domain
+            val cleanTitle = if (msg.title.isNullOrEmpty() || msg.title.equals("null", ignoreCase = true)) null else msg.title
+            val cleanUrl = if (msg.url.isNullOrEmpty() || msg.url.equals("null", ignoreCase = true)) null else msg.url
+
+            if (cleanDomain != null) {
+                tvDomain.visibility = View.VISIBLE
+                tvDomain.text = cleanDomain
+            } else {
+                tvDomain.visibility = View.GONE
+            }
+
+            tvTitle.text = cleanTitle ?: cleanUrl ?: "Shared Link"
+            tvUrl.text = cleanUrl ?: ""
+            tvUrl.visibility = if (cleanUrl != null) View.VISIBLE else View.GONE
 
             btnOpen.setOnClickListener {
-                msg.url?.let { linkUrl ->
+                cleanUrl?.let { linkUrl ->
                     try {
                         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(linkUrl))
                         context.startActivity(browserIntent)
-                    } catch (_: Exception) {}
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -149,12 +163,15 @@ class MessageAdapter(
 
     inner class ImageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val row: LinearLayout = itemView.findViewById(R.id.llImageRow)
+        private val cardContainer: View? = itemView.findViewById(R.id.cardImageContainer)
         private val tvSender: TextView = itemView.findViewById(R.id.tvImageSender)
+        private val tvTime: TextView? = itemView.findViewById(R.id.tvImageTime)
         private val ivImage: ImageView = itemView.findViewById(R.id.ivMessageImage)
 
         fun bind(msg: ChatMessage) {
             row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
             tvSender.text = if (msg.isOutgoing) "You" else "${msg.senderName} (${msg.browser})"
+            tvTime?.text = timeFormatter.format(Date(msg.timestamp))
 
             val rawData = msg.media?.data ?: ""
             if (rawData.isNotEmpty()) {
@@ -167,6 +184,23 @@ class MessageAdapter(
                     ivImage.setImageResource(R.mipmap.ic_launcher)
                 }
             }
+
+            val openViewerAction = View.OnClickListener {
+                if (rawData.isNotEmpty()) {
+                    val intent = Intent(context, ImageViewerActivity::class.java).apply {
+                        putExtra(ImageViewerActivity.EXTRA_IMAGE_DATA, rawData)
+                        putExtra(ImageViewerActivity.EXTRA_IMAGE_NAME, msg.media?.name ?: "image.jpg")
+                        putExtra(ImageViewerActivity.EXTRA_SENDER, if (msg.isOutgoing) "You (Android)" else "${msg.senderName} (${msg.browser})")
+                        putExtra(ImageViewerActivity.EXTRA_TIMESTAMP, msg.timestamp)
+                    }
+                    context.startActivity(intent)
+                } else {
+                    Toast.makeText(context, "Image data not available", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            ivImage.setOnClickListener(openViewerAction)
+            cardContainer?.setOnClickListener(openViewerAction)
         }
     }
 

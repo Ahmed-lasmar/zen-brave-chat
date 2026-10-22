@@ -20,4 +20,13 @@
         <item name="android:statusBarColor">@color/transparent</item>
         <item name="android:navigationBarColor">@color/bg_dark</item>
     </style>
+
+    <!-- Fullscreen Dark Theme for Image Lightbox Viewer -->
+    <style name="Theme.ZenBrave.FullscreenViewer" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowBackground">#090D16</item>
+        <item name="android:statusBarColor">#090D16</item>
+        <item name="android:navigationBarColor">#090D16</item>
+        <item name="colorPrimary">@color/accent_purple</item>
+        <item name="colorSecondary">@color/accent_brave</item>
+    </style>
 </resources>
