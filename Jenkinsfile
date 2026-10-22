@@ -28,12 +28,14 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    echo '=== Running Automated Unit & E2E Tests ==='
+                    echo '=== Running Automated Unit & E2E Tests via Node Container ==='
                     sh '''
-                        node tests/server.test.js
-                        node tests/storage.test.js
-                        node tests/connection.test.js
-                        node scripts/test-connection.js
+                        docker run --rm -v "${WORKSPACE}":/app -w /app node:20-alpine sh -c "
+                            node tests/server.test.js &&
+                            node tests/storage.test.js &&
+                            node tests/connection.test.js &&
+                            node scripts/test-connection.js
+                        "
                     '''
                 }
             }
@@ -43,7 +45,7 @@ pipeline {
             steps {
                 script {
                     echo '=== Building Zen & Brave Extension Packages ==='
-                    sh 'node scripts/build.js'
+                    sh 'docker run --rm -v "${WORKSPACE}":/app -w /app node:20-alpine node scripts/build.js'
                 }
             }
         }
