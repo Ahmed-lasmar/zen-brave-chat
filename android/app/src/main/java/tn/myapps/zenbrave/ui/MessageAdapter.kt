@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Base64
 import android.view.Gravity
@@ -11,13 +12,16 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import tn.myapps.zenbrave.R
 import tn.myapps.zenbrave.model.ChatMessage
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -30,17 +34,27 @@ class MessageAdapter(
         private const val TYPE_TEXT = 1
         private const val TYPE_LINK = 2
         private const val TYPE_IMAGE = 3
-        private const val TYPE_SYSTEM = 4
+        private const val TYPE_VOICE = 4
+        private const val TYPE_SYSTEM = 5
         private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
     }
+
+    private var mediaPlayer: MediaPlayer? = null
+    private var currentlyPlayingId: String? = null
 
     override fun getItemViewType(position: Int): Int {
         val msg = messages[position]
         return when (msg.type) {
             "system" -> TYPE_SYSTEM
             "link" -> TYPE_LINK
+            "voice" -> TYPE_VOICE
             "image" -> TYPE_IMAGE
-            else -> if (msg.url != null) TYPE_LINK else if (msg.media != null) TYPE_IMAGE else TYPE_TEXT
+            else -> {
+                if (msg.url != null) TYPE_LINK
+                else if (msg.media?.type == "voice") TYPE_VOICE
+                else if (msg.media != null) TYPE_IMAGE
+                else TYPE_TEXT
+            }
         }
     }
 
@@ -49,6 +63,7 @@ class MessageAdapter(
         return when (viewType) {
             TYPE_LINK -> LinkViewHolder(inflater.inflate(R.layout.item_message_link, parent, false))
             TYPE_IMAGE -> ImageViewHolder(inflater.inflate(R.layout.item_message_image, parent, false))
+            TYPE_VOICE -> VoiceViewHolder(inflater.inflate(R.layout.item_message_voice, parent, false))
             TYPE_SYSTEM -> SystemViewHolder(inflater.inflate(R.layout.item_message_system, parent, false))
             else -> TextViewHolder(inflater.inflate(R.layout.item_message_text, parent, false))
         }
@@ -60,6 +75,7 @@ class MessageAdapter(
             is TextViewHolder -> holder.bind(msg)
             is LinkViewHolder -> holder.bind(msg)
             is ImageViewHolder -> holder.bind(msg)
+            is VoiceViewHolder -> holder.bind(msg)
             is SystemViewHolder -> holder.bind(msg)
         }
     }
@@ -152,6 +168,86 @@ class MessageAdapter(
                 }
             }
         }
+    }
+
+    inner class VoiceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val row: LinearLayout = itemView.findViewById(R.id.llVoiceRow)
+        private val tvSender: TextView = itemView.findViewById(R.id.tvVoiceSender)
+        private val tvTitle: TextView = itemView.findViewById(R.id.tvVoiceTitle)
+        private val tvMeta: TextView = itemView.findViewById(R.id.tvVoiceMeta)
+        private val btnPlay: ImageButton = itemView.findViewById(R.id.btnVoicePlay)
+
+        fun bind(msg: ChatMessage) {
+            row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
+            tvSender.text = if (msg.isOutgoing) "You" else "${msg.senderName} (${msg.browser})"
+            tvTitle.text = if (msg.text.isNotEmpty()) msg.text else "🎤 Voice Note"
+            tvMeta.text = timeFormatter.format(Date(msg.timestamp))
+
+            val isPlaying = (currentlyPlayingId == msg.id)
+            btnPlay.setImageResource(
+                if (isPlaying) android.R.drawable.ic_media_pause
+                else android.R.drawable.ic_media_play
+            )
+
+            btnPlay.setOnClickListener {
+                toggleAudioPlayback(msg)
+            }
+        }
+    }
+
+    private fun toggleAudioPlayback(msg: ChatMessage) {
+        if (currentlyPlayingId == msg.id) {
+            stopAudio()
+            notifyDataSetChanged()
+            return
+        }
+
+        stopAudio()
+
+        val rawData = msg.media?.data ?: ""
+        if (rawData.isEmpty()) {
+            Toast.makeText(context, "Voice note audio data is missing", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val base64Data = if (rawData.contains(",")) rawData.substringAfter(",") else rawData
+            val audioBytes = Base64.decode(base64Data, Base64.DEFAULT)
+            val mimeType = msg.media?.mimeType ?: "audio/mp4"
+            val ext = if (mimeType.contains("ogg")) ".ogg" else if (mimeType.contains("webm")) ".webm" else ".m4a"
+            val tempFile = File(context.cacheDir, "play_audio_${msg.id.hashCode()}$ext")
+            tempFile.writeBytes(audioBytes)
+
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(tempFile.absolutePath)
+                setOnCompletionListener {
+                    stopAudio()
+                    notifyDataSetChanged()
+                }
+                setOnErrorListener { _, _, _ ->
+                    stopAudio()
+                    notifyDataSetChanged()
+                    true
+                }
+                prepare()
+                start()
+            }
+            currentlyPlayingId = msg.id
+            notifyDataSetChanged()
+        } catch (e: Exception) {
+            Toast.makeText(context, "Playback failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            stopAudio()
+            notifyDataSetChanged()
+        }
+    }
+
+    fun stopAudio() {
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (_: Exception) {}
+        mediaPlayer = null
+        currentlyPlayingId = null
     }
 
     inner class SystemViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {

@@ -210,6 +210,59 @@
         </LinearLayout>
     </FrameLayout>
 
+    <!-- Voice Recording Banner (Hidden by default) -->
+    <LinearLayout
+        android:id="@+id/layoutVoiceRecording"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_variant"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp"
+        android:visibility="gone">
+
+        <View
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:background="@drawable/ic_status_dot_red" />
+
+        <TextView
+            android:id="@+id/tvVoiceRecordingTimer"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:text="Recording... 00:01"
+            android:textColor="@color/accent_red"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnVoiceCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_btn_secondary"
+            android:paddingHorizontal="12dp"
+            android:text="Cancel"
+            android:textAllCaps="false"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnVoiceSend"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_btn_primary"
+            android:paddingHorizontal="14dp"
+            android:text="Send 🎤"
+            android:textAllCaps="false"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
     <!-- Bottom Input Bar -->
     <LinearLayout
         android:id="@+id/bottomBar"
@@ -231,12 +284,23 @@
             android:src="@android:drawable/ic_menu_gallery"
             android:tint="@color/text_secondary" />
 
+        <!-- Microphone Button -->
+        <ImageButton
+            android:id="@+id/btnMicVoice"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_btn_secondary"
+            android:contentDescription="Record voice note"
+            android:src="@android:drawable/ic_btn_speak_now"
+            android:tint="@color/accent_purple" />
+
         <!-- Message Input -->
         <EditText
             android:id="@+id/etMessage"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="8dp"
+            android:layout_marginHorizontal="6dp"
             android:layout_weight="1"
             android:background="@drawable/bg_input"
             android:hint="Type a message or paste URL..."

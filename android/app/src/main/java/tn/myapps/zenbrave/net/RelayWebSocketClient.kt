@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit
 interface RelayListener {
     fun onConnected() {}
     fun onDisconnected(reason: String) {}
+    fun onRoomCreated(roomId: String) {}
     fun onRoomJoined(roomId: String, peerId: String, peers: List<PeerInfo>, history: List<ChatMessage>) {}
     fun onPeerJoined(peer: PeerInfo) {}
     fun onPeerLeft(peerId: String, name: String) {}
@@ -215,6 +216,7 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
                 "room-created" -> {
                     val roomId = json.optString("roomId")
                     currentRoomId = roomId
+                    listener?.onRoomCreated(roomId)
                     val name = pendingUserName ?: "Android Friend"
                     val peerId = currentPeerId ?: "android-${(1000..9999).random()}"
                     doJoinRoom(roomId, name, peerId)
@@ -314,10 +316,18 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
         val url = obj.optString("url", linkObj?.optString("url") ?: "").ifEmpty { null }
         val title = obj.optString("title", linkObj?.optString("title") ?: "").ifEmpty { null }
         val domain = obj.optString("domain", linkObj?.optString("domain") ?: "").ifEmpty { null }
+        val rawType = obj.optString("type")
+        val finalType = when {
+            rawType == "voice" || media?.type == "voice" -> "voice"
+            rawType.isNotEmpty() -> rawType
+            url != null -> "link"
+            media != null -> "image"
+            else -> "text"
+        }
 
         return ChatMessage(
             id = obj.optString("id", "msg-${System.currentTimeMillis()}"),
-            type = obj.optString("type", if (url != null) "link" else if (media != null) "image" else "text"),
+            type = finalType,
             text = obj.optString("text", ""),
             url = url,
             title = title,

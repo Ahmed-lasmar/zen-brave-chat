@@ -60,6 +60,8 @@ class ShareActivity : AppCompatActivity(), RelayListener {
 
     private var isSending = false
     private var targetRoom: String = ""
+    private var pendingMsgId: String? = null
+    private val ackTimeoutHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +73,12 @@ class ShareActivity : AppCompatActivity(), RelayListener {
         initViews()
         parseSharedIntent(intent)
         setupRecentRooms()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        parseSharedIntent(intent)
     }
 
     private fun initViews() {
@@ -113,21 +121,27 @@ class ShareActivity : AppCompatActivity(), RelayListener {
         val action = inIntent.action
         val type = inIntent.type ?: ""
 
+        val extraText = inIntent.getStringExtra(Intent.EXTRA_TEXT)
+            ?: inIntent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+            ?: inIntent.dataString
+            ?: ""
+        val extraSubject = inIntent.getStringExtra(Intent.EXTRA_SUBJECT)
+            ?: inIntent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString()
+
         if (Intent.ACTION_SEND == action) {
             if (type.startsWith("image/")) {
-                handleSendImage(inIntent)
+                handleSendImage(inIntent, extraText, extraSubject)
             } else {
-                handleSendText(inIntent)
+                handleSendText(extraText, extraSubject)
             }
         } else if (Intent.ACTION_SEND_MULTIPLE == action && type.startsWith("image/")) {
-            handleSendMultipleImages(inIntent)
+            handleSendMultipleImages(inIntent, extraText, extraSubject)
+        } else {
+            handleSendText(extraText, extraSubject)
         }
     }
 
-    private fun handleSendText(inIntent: Intent) {
-        val extraText = inIntent.getStringExtra(Intent.EXTRA_TEXT) ?: ""
-        val extraSubject = inIntent.getStringExtra(Intent.EXTRA_SUBJECT)
-
+    private fun handleSendText(extraText: String, extraSubject: String?) {
         val extractedUrl = RoomPreferences.extractUrl(extraText)
         sharedUrl = extractedUrl
         sharedText = extraText
@@ -153,7 +167,16 @@ class ShareActivity : AppCompatActivity(), RelayListener {
         }
     }
 
-    private fun handleSendImage(inIntent: Intent) {
+    private fun handleSendImage(inIntent: Intent, extraText: String, extraSubject: String?) {
+        if (extraText.isNotEmpty()) {
+            sharedText = extraText
+            val extractedUrl = RoomPreferences.extractUrl(extraText)
+            if (extractedUrl != null) sharedUrl = extractedUrl
+        }
+        if (!extraSubject.isNullOrBlank()) {
+            sharedTitle = extraSubject
+        }
+
         val imageUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             inIntent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         } else {
@@ -166,7 +189,10 @@ class ShareActivity : AppCompatActivity(), RelayListener {
         }
     }
 
-    private fun handleSendMultipleImages(inIntent: Intent) {
+    private fun handleSendMultipleImages(inIntent: Intent, extraText: String, extraSubject: String?) {
+        if (extraText.isNotEmpty()) {
+            sharedText = extraText
+        }
         val imageUris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             inIntent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
         } else {
@@ -225,29 +251,53 @@ class ShareActivity : AppCompatActivity(), RelayListener {
         }
 
         chipContainer.removeAllViews()
-        for (room in recents) {
-            val chip = TextView(this).apply {
-                text = room
-                textSize = 13f
-                setTextColor(ContextCompat.getColor(this@ShareActivity, R.color.text_primary))
-                val isSelected = room.equals(lastRoom, ignoreCase = true)
-                background = ContextCompat.getDrawable(
-                    this@ShareActivity,
-                    if (isSelected) R.drawable.bg_chip_selected else R.drawable.bg_chip
-                )
 
+        if (recents.isEmpty()) {
+            val createChip = TextView(this).apply {
+                text = "+ Create New Room"
+                textSize = 13f
+                setTextColor(ContextCompat.getColor(this@ShareActivity, R.color.accent_purple))
+                background = ContextCompat.getDrawable(this@ShareActivity, R.drawable.bg_chip)
                 val params = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
                 params.setMargins(0, 0, 16, 0)
                 layoutParams = params
-
                 setOnClickListener {
-                    selectChip(room)
+                    tvStatus.visibility = View.VISIBLE
+                    tvStatus.text = "Creating room..."
+                    client.connect(prefs.serverUrl) {
+                        client.createRoom(prefs.userName, prefs.peerId)
+                    }
                 }
             }
-            chipContainer.addView(chip)
+            chipContainer.addView(createChip)
+        } else {
+            for (room in recents) {
+                val chip = TextView(this).apply {
+                    text = room
+                    textSize = 13f
+                    setTextColor(ContextCompat.getColor(this@ShareActivity, R.color.text_primary))
+                    val isSelected = room.equals(lastRoom, ignoreCase = true)
+                    background = ContextCompat.getDrawable(
+                        this@ShareActivity,
+                        if (isSelected) R.drawable.bg_chip_selected else R.drawable.bg_chip
+                    )
+
+                    val params = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                    params.setMargins(0, 0, 16, 0)
+                    layoutParams = params
+
+                    setOnClickListener {
+                        selectChip(room)
+                    }
+                }
+                chipContainer.addView(chip)
+            }
         }
     }
 
@@ -290,6 +340,13 @@ class ShareActivity : AppCompatActivity(), RelayListener {
         }
     }
 
+    override fun onRoomCreated(roomId: String) {
+        prefs.lastRoomId = roomId
+        targetRoom = roomId
+        etRoomCode.setText(roomId)
+        tvStatus.text = "Created room $roomId"
+    }
+
     override fun onRoomJoined(roomId: String, peerId: String, peers: List<PeerInfo>, history: List<ChatMessage>) {
         if (!isSending) return
 
@@ -318,12 +375,29 @@ class ShareActivity : AppCompatActivity(), RelayListener {
             isOutgoing = true
         )
 
-        client.sendRelayMessage(roomId, message) {
+        pendingMsgId = message.id
+
+        // Arm safety timeout fallback in case server ack is delayed or dropped
+        ackTimeoutHandler.removeCallbacksAndMessages(null)
+        ackTimeoutHandler.postDelayed({
+            if (isSending) {
+                onSendSuccess()
+            }
+        }, 5000)
+
+        client.sendRelayMessage(roomId, message)
+    }
+
+    override fun onMessageAck(messageId: String) {
+        if (isSending && (pendingMsgId == null || pendingMsgId == messageId)) {
+            ackTimeoutHandler.removeCallbacksAndMessages(null)
             onSendSuccess()
         }
     }
 
     private fun onSendSuccess() {
+        if (!isSending) return
+        isSending = false
         triggerHaptic()
         tvStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_green))
         tvStatus.text = "Sent to room $targetRoom! 🚀"
@@ -349,8 +423,15 @@ class ShareActivity : AppCompatActivity(), RelayListener {
         } catch (_: Exception) {}
     }
 
+    override fun onDisconnected(reason: String) {
+        if (isSending) {
+            onError("Connection dropped: $reason")
+        }
+    }
+
     override fun onError(error: String) {
         if (isSending) {
+            ackTimeoutHandler.removeCallbacksAndMessages(null)
             tvStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_red))
             tvStatus.text = "Error: $error"
             btnSend.isEnabled = true
@@ -362,6 +443,7 @@ class ShareActivity : AppCompatActivity(), RelayListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        ackTimeoutHandler.removeCallbacksAndMessages(null)
         client.disconnect()
     }
 }

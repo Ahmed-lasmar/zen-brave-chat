@@ -1,12 +1,17 @@
 package tn.myapps.zenbrave.ui
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Base64
@@ -30,6 +35,7 @@ import tn.myapps.zenbrave.model.PeerInfo
 import tn.myapps.zenbrave.net.RelayListener
 import tn.myapps.zenbrave.net.RelayWebSocketClient
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.InputStream
 
 class MainActivity : AppCompatActivity(), RelayListener {
@@ -51,12 +57,37 @@ class MainActivity : AppCompatActivity(), RelayListener {
     private lateinit var etMessage: EditText
     private lateinit var btnSend: ImageButton
     private lateinit var btnAttachImage: ImageButton
+    private lateinit var btnMicVoice: ImageButton
+    private lateinit var layoutVoiceRecording: LinearLayout
+    private lateinit var tvVoiceRecordingTimer: TextView
+    private lateinit var btnVoiceCancel: Button
+    private lateinit var btnVoiceSend: Button
+
+    private var mediaRecorder: MediaRecorder? = null
+    private var isRecordingVoice = false
+    private var recordingStartTime = 0L
+    private val voiceTimerHandler = Handler(Looper.getMainLooper())
+    private var currentVoiceFile: File? = null
+
+    private var reconnectHandler = Handler(Looper.getMainLooper())
+    private var reconnectAttempt = 0
+    private val maxReconnectDelay = 30000L
 
     private val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
             sendImageUri(uri)
+        }
+    }
+
+    private val requestAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startVoiceRecording()
+        } else {
+            Toast.makeText(this, "Microphone permission is required to record voice notes", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -89,10 +120,22 @@ class MainActivity : AppCompatActivity(), RelayListener {
         etMessage = findViewById(R.id.etMessage)
         btnSend = findViewById(R.id.btnSend)
         btnAttachImage = findViewById(R.id.btnAttachImage)
+        btnMicVoice = findViewById(R.id.btnMicVoice)
+        layoutVoiceRecording = findViewById(R.id.layoutVoiceRecording)
+        tvVoiceRecordingTimer = findViewById(R.id.tvVoiceRecordingTimer)
+        btnVoiceCancel = findViewById(R.id.btnVoiceCancel)
+        btnVoiceSend = findViewById(R.id.btnVoiceSend)
 
         tvActiveRoomBadge.setOnClickListener {
             // Toggle connect panel to switch rooms
             panelConnect.visibility = if (panelConnect.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+
+        vStatusDot.setOnClickListener {
+            if (!client.isConnected) connectToServer()
+        }
+        tvStatusText.setOnClickListener {
+            if (!client.isConnected) connectToServer()
         }
 
         btnMainJoinRoom.setOnClickListener {
@@ -120,6 +163,32 @@ class MainActivity : AppCompatActivity(), RelayListener {
 
         btnAttachImage.setOnClickListener {
             pickImageLauncher.launch("image/*")
+        }
+
+        btnMicVoice.setOnClickListener {
+            if (isRecordingVoice) {
+                stopAndSendVoiceRecording()
+            } else {
+                val activeRoom = client.currentRoomId
+                if (activeRoom.isNullOrEmpty()) {
+                    Toast.makeText(this, "Please join a room first", Toast.LENGTH_SHORT).show()
+                    panelConnect.visibility = View.VISIBLE
+                    return@setOnClickListener
+                }
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    startVoiceRecording()
+                } else {
+                    requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
+        }
+
+        btnVoiceCancel.setOnClickListener {
+            cancelVoiceRecording()
+        }
+
+        btnVoiceSend.setOnClickListener {
+            stopAndSendVoiceRecording()
         }
     }
 
@@ -281,6 +350,118 @@ class MainActivity : AppCompatActivity(), RelayListener {
         }
     }
 
+    private fun startVoiceRecording() {
+        val audioFile = File(cacheDir, "voice_record.m4a")
+        currentVoiceFile = audioFile
+        try {
+            mediaRecorder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }).apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setOutputFile(audioFile.absolutePath)
+                prepare()
+                start()
+            }
+            isRecordingVoice = true
+            recordingStartTime = System.currentTimeMillis()
+            layoutVoiceRecording.visibility = View.VISIBLE
+            voiceTimerHandler.removeCallbacksAndMessages(null)
+            updateVoiceTimer()
+            triggerHaptic()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not start audio recording: ${e.message}", Toast.LENGTH_SHORT).show()
+            cancelVoiceRecording()
+        }
+    }
+
+    private fun updateVoiceTimer() {
+        if (!isRecordingVoice) return
+        val elapsedSec = ((System.currentTimeMillis() - recordingStartTime) / 1000).toInt()
+        val mins = elapsedSec / 60
+        val secs = elapsedSec % 60
+        tvVoiceRecordingTimer.text = String.format("Recording... %02d:%02d", mins, secs)
+        voiceTimerHandler.postDelayed({ updateVoiceTimer() }, 1000)
+    }
+
+    private fun cancelVoiceRecording() {
+        voiceTimerHandler.removeCallbacksAndMessages(null)
+        try {
+            mediaRecorder?.stop()
+            mediaRecorder?.release()
+        } catch (_: Exception) {}
+        mediaRecorder = null
+        isRecordingVoice = false
+        layoutVoiceRecording.visibility = View.GONE
+        try {
+            currentVoiceFile?.delete()
+        } catch (_: Exception) {}
+        currentVoiceFile = null
+    }
+
+    private fun stopAndSendVoiceRecording() {
+        if (!isRecordingVoice) return
+        voiceTimerHandler.removeCallbacksAndMessages(null)
+        val durationSec = Math.max(1, ((System.currentTimeMillis() - recordingStartTime) / 1000).toInt())
+        try {
+            mediaRecorder?.stop()
+            mediaRecorder?.release()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Recording too short", Toast.LENGTH_SHORT).show()
+            cancelVoiceRecording()
+            return
+        }
+        mediaRecorder = null
+        isRecordingVoice = false
+        layoutVoiceRecording.visibility = View.GONE
+
+        val file = currentVoiceFile ?: return
+        if (!file.exists() || file.length() == 0L) return
+
+        val activeRoom = client.currentRoomId
+        if (activeRoom.isNullOrEmpty()) {
+            Toast.makeText(this, "Please join a room first", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val bytes = file.readBytes()
+            val base64 = "data:audio/mp4;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
+            val message = ChatMessage(
+                id = "msg-${System.currentTimeMillis()}-${(1000..9999).random()}",
+                type = "voice",
+                text = "🎤 Voice note (${durationSec}s)",
+                media = MediaPayload(
+                    type = "voice",
+                    mimeType = "audio/mp4",
+                    data = base64,
+                    name = "voice_${System.currentTimeMillis()}.m4a"
+                ),
+                senderId = prefs.peerId,
+                senderName = prefs.userName,
+                browser = "Android",
+                timestamp = System.currentTimeMillis(),
+                isOutgoing = true
+            )
+
+            client.sendRelayMessage(activeRoom, message) {
+                adapter.addMessage(message)
+                rvMessages.scrollToPosition(adapter.itemCount - 1)
+                layoutEmptyState.visibility = View.GONE
+                triggerHaptic()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Failed to send voice note: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+            try { file.delete() } catch (_: Exception) {}
+            currentVoiceFile = null
+        }
+    }
+
     private fun triggerHaptic() {
         try {
             val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
@@ -290,15 +471,35 @@ class MainActivity : AppCompatActivity(), RelayListener {
         } catch (_: Exception) {}
     }
 
+    private fun scheduleReconnect() {
+        if (isDestroyed || isFinishing) return
+        val delay = Math.min(1000L * (1 shl reconnectAttempt), maxReconnectDelay)
+        reconnectAttempt++
+        reconnectHandler.postDelayed({
+            if (!client.isConnected) {
+                connectToServer()
+            }
+        }, delay)
+    }
+
     // RelayListener implementation
     override fun onConnected() {
+        reconnectAttempt = 0
+        reconnectHandler.removeCallbacksAndMessages(null)
         vStatusDot.background = ContextCompat.getDrawable(this, R.drawable.ic_status_dot_green)
         tvStatusText.text = "Connected"
     }
 
     override fun onDisconnected(reason: String) {
         vStatusDot.background = ContextCompat.getDrawable(this, R.drawable.ic_status_dot_red)
-        tvStatusText.text = "Offline"
+        tvStatusText.text = "Offline (Reconnecting...)"
+        scheduleReconnect()
+    }
+
+    override fun onRoomCreated(roomId: String) {
+        prefs.lastRoomId = roomId
+        etMainRoomCode.setText(roomId)
+        tvActiveRoomBadge.text = "Room: $roomId"
     }
 
     override fun onRoomJoined(roomId: String, peerId: String, peers: List<PeerInfo>, history: List<ChatMessage>) {
@@ -359,6 +560,9 @@ class MainActivity : AppCompatActivity(), RelayListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        reconnectHandler.removeCallbacksAndMessages(null)
+        cancelVoiceRecording()
+        adapter.stopAudio()
         client.disconnect()
     }
 }

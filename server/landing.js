@@ -289,7 +289,7 @@ function renderLandingPage(wsEndpoint, stats = {}) {
             <span class="card-icon">📱</span>
             <div>
               <div class="card-title">Android Mobile App</div>
-              <div class="card-meta">System Share Target &bull; Mobile Chat</div>
+              <div class="card-meta">System Share Target &bull; Mobile Chat &bull; Voice Notes</div>
             </div>
           </div>
           <ul class="steps">

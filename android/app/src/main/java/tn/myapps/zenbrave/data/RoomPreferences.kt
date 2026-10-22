@@ -24,7 +24,12 @@ class RoomPreferences(context: Context) {
         fun extractUrl(text: String?): String? {
             if (text == null) return null
             val matcher = URL_PATTERN.matcher(text)
-            return if (matcher.find()) matcher.group() else null
+            if (!matcher.find()) return null
+            var url = matcher.group()
+            while (url.endsWith(".") || url.endsWith(",") || url.endsWith(")") || url.endsWith("]") || url.endsWith("!") || url.endsWith(";")) {
+                url = url.substring(0, url.length - 1)
+            }
+            return url.ifEmpty { null }
         }
 
         fun extractDomain(urlStr: String?): String {

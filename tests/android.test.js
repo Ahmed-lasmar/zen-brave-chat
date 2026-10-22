@@ -116,6 +116,105 @@ async function runTests() {
       assert.ok(content.includes('tn.myapps.zenbrave.ui.MainActivity') || content.includes('.ui.MainActivity'));
       assert.ok(content.includes('android.intent.action.MAIN'));
       assert.ok(content.includes('android.intent.category.LAUNCHER'));
+      assert.ok(content.includes('android.permission.RECORD_AUDIO'), 'Must declare RECORD_AUDIO for voice notes');
+      assert.ok(content.includes('text/*'), 'Must declare text/* mimeType data tag');
+    });
+
+    // 7. Voice Note Layout & MessageAdapter Support
+    await test('Voice note layout exists and MessageAdapter supports voice messages', async () => {
+      const voiceLayoutPath = path.join(__dirname, '../android/app/src/main/res/layout/item_message_voice.xml');
+      assert.ok(fs.existsSync(voiceLayoutPath), 'item_message_voice.xml must exist');
+      const layoutContent = fs.readFileSync(voiceLayoutPath, 'utf8');
+      assert.ok(layoutContent.includes('btnVoicePlay'), 'Voice layout must include play button');
+      assert.ok(layoutContent.includes('tvVoiceTitle'), 'Voice layout must include title');
+
+      const adapterPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/ui/MessageAdapter.kt');
+      const adapterContent = fs.readFileSync(adapterPath, 'utf8');
+      assert.ok(adapterContent.includes('TYPE_VOICE'), 'MessageAdapter must have TYPE_VOICE view type');
+      assert.ok(adapterContent.includes('VoiceViewHolder'), 'MessageAdapter must have VoiceViewHolder');
+      assert.ok(adapterContent.includes('MediaPlayer'), 'MessageAdapter must use MediaPlayer for audio');
+    });
+
+    // 8. URL Extraction trailing punctuation cleanup verification
+    await test('URL extraction logic cleans trailing punctuation from social app messages', async () => {
+      const prefsPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/data/RoomPreferences.kt');
+      const prefsContent = fs.readFileSync(prefsPath, 'utf8');
+      assert.ok(prefsContent.includes('url.endsWith'), 'extractUrl must clean trailing punctuation');
+
+      // Verify regex logic
+      const urlRegex = /https?:\/\/[\w\-.~:?#\[\]@!$&'()*+,;=\/%]+/g;
+      function cleanUrl(text) {
+        const matches = text.match(urlRegex);
+        if (!matches || !matches[0]) return null;
+        let u = matches[0];
+        while (u.endsWith('.') || u.endsWith(',') || u.endsWith(')') || u.endsWith(']') || u.endsWith('!') || u.endsWith(';')) {
+          u = u.slice(0, -1);
+        }
+        return u;
+      }
+
+      assert.strictEqual(cleanUrl('Check https://zen-browser.app/.'), 'https://zen-browser.app/');
+      assert.strictEqual(cleanUrl('(https://youtube.com/watch?v=1234)!'), 'https://youtube.com/watch?v=1234');
+      assert.strictEqual(cleanUrl('Visit https://zenbrave.myapps.tn/download/android,'), 'https://zenbrave.myapps.tn/download/android');
+    });
+
+    // 9. Bi-directional WebSocket Voice Note Relaying & Server ACK
+    await test('Relay server accepts mobile voice message and sends ACK to sender', async () => {
+      const { connectWebSocket } = require('../server/websocket');
+      const sender = await connectWebSocket(`ws://127.0.0.1:${addr.port}`);
+      const receiver = await connectWebSocket(`ws://127.0.0.1:${addr.port}`);
+
+      const testRoom = 'ZEN-VOICE';
+      let receiverGotVoice = false;
+      let senderGotAck = false;
+
+      receiver.on('message', (raw) => {
+        const msg = JSON.parse(raw);
+        if (msg.type === 'relayed-message' && msg.message && msg.message.type === 'voice') {
+          if (msg.message.media && msg.message.media.mimeType === 'audio/mp4') {
+            receiverGotVoice = true;
+          }
+        }
+      });
+
+      sender.on('message', (raw) => {
+        const msg = JSON.parse(raw);
+        if (msg.type === 'ack' && msg.messageId === 'msg-voice-test-123') {
+          senderGotAck = true;
+        }
+      });
+
+      // Join room
+      receiver.send(JSON.stringify({ type: 'join-room', roomId: testRoom, name: 'Desktop Zen' }));
+      sender.send(JSON.stringify({ type: 'join-room', roomId: testRoom, name: 'Mobile Android' }));
+      await new Promise(r => setTimeout(r, 60));
+
+      // Send voice note
+      sender.send(JSON.stringify({
+        type: 'relay-message',
+        roomId: testRoom,
+        senderId: 'android-peer',
+        payload: {
+          id: 'msg-voice-test-123',
+          type: 'voice',
+          text: '🎤 Voice note (4s)',
+          media: {
+            type: 'voice',
+            mimeType: 'audio/mp4',
+            data: 'data:audio/mp4;base64,AAAAHGZ0eXBNNEEgAAAA...',
+            name: 'voice_123.m4a'
+          },
+          browser: 'Android'
+        }
+      }));
+
+      await new Promise(r => setTimeout(r, 100));
+
+      assert.strictEqual(receiverGotVoice, true, 'Desktop peer must receive the relayed voice note');
+      assert.strictEqual(senderGotAck, true, 'Sender must receive server ACK confirmation');
+
+      sender.close();
+      receiver.close();
     });
 
   } finally {
