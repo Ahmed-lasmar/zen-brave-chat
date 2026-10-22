@@ -25,37 +25,22 @@ pipeline {
             }
         }
 
-        stage('Run Tests') {
-            steps {
-                script {
-                    echo '=== Running Automated Unit & E2E Tests via Node Container ==='
-                    sh '''
-                        docker run --rm -v "${WORKSPACE}":/app -w /app node:20-alpine sh -c "
-                            node tests/server.test.js &&
-                            node tests/storage.test.js &&
-                            node tests/connection.test.js &&
-                            node scripts/test-connection.js
-                        "
-                    '''
-                }
-            }
-        }
-
-        stage('Build Extension Dist') {
-            steps {
-                script {
-                    echo '=== Building Zen & Brave Extension Packages ==='
-                    sh 'docker run --rm -v "${WORKSPACE}":/app -w /app node:20-alpine node scripts/build.js'
-                }
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 script {
                     def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     echo "=== Building Docker image for commit: ${commitId} ==="
-                    sh "docker build --pull -t ${DOCKER_IMAGE_NAME}:latest -t ${DOCKER_IMAGE_NAME}:${commitId} ."
+                    sh "docker build -t ${DOCKER_IMAGE_NAME}:latest -t ${DOCKER_IMAGE_NAME}:${commitId} ."
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                script {
+                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    echo '=== Running Automated Unit & E2E Tests in Docker Image ==='
+                    sh "docker run --rm ${DOCKER_IMAGE_NAME}:${commitId} npm test"
                 }
             }
         }
@@ -77,19 +62,11 @@ pipeline {
         stage('Deploy to VPS (CD)') {
             steps {
                 script {
-                    echo "=== Deploying relay container to ${DEPLOYMENT_PATH} ==="
+                    echo "=== Deploying relay container ${CONTAINER_NAME} ==="
                     sh """
-                        mkdir -p ${DEPLOYMENT_PATH}
-                        cp -f docker-compose.yml ${DEPLOYMENT_PATH}/docker-compose.yml 2>/dev/null || true
-                        cd ${DEPLOYMENT_PATH}
-                        
-                        if command -v docker-compose >/dev/null 2>&1; then
-                            docker-compose pull zen-brave-chat || true
-                            docker-compose up -d --force-recreate zen-brave-chat
-                        else
-                            docker compose pull zen-brave-chat || true
-                            docker compose up -d --force-recreate zen-brave-chat
-                        fi
+                        docker stop ${CONTAINER_NAME} || true
+                        docker rm ${CONTAINER_NAME} || true
+                        docker run -d --name ${CONTAINER_NAME} --restart unless-stopped -p 127.0.0.1:${PORT}:${PORT} ${DOCKER_IMAGE_NAME}:latest
                     """
                 }
             }
@@ -99,7 +76,7 @@ pipeline {
             steps {
                 script {
                     echo '=== Verifying Server Health ==='
-                    sleep(time: 5, unit: 'SECONDS')
+                    sleep(time: 3, unit: 'SECONDS')
                     sh """
                         docker ps --filter "name=${CONTAINER_NAME}" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
                         docker exec ${CONTAINER_NAME} node -e "require('http').get('http://localhost:${PORT}/health', (r) => { console.log('Relay server health status:', r.statusCode); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', (e) => { console.error(e); process.exit(1); })"
