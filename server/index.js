@@ -31,12 +31,19 @@ function createServer(options = {}) {
     }
 
     if (url.pathname === '/') {
+      const isHttps = req.headers['x-forwarded-proto'] === 'https' ||
+                      req.headers['x-forwarded-ssl'] === 'on' ||
+                      Boolean(req.socket && req.socket.encrypted);
+      const wsProto = isHttps ? 'wss://' : 'ws://';
+      const host = req.headers.host || 'localhost:3000';
+      const wsEndpoint = wsProto + host;
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         name: 'Zen & Brave Link & Chat Relay Server',
         version: '1.0.0',
         status: 'running',
-        wsEndpoint: 'ws://' + (req.headers.host || 'localhost:3000'),
+        wsEndpoint: wsEndpoint,
         stats: roomManager.getStats()
       }, null, 2));
       return;
