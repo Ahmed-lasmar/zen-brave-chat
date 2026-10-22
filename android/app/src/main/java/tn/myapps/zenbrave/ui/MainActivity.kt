@@ -34,6 +34,7 @@ import tn.myapps.zenbrave.model.MediaPayload
 import tn.myapps.zenbrave.model.PeerInfo
 import tn.myapps.zenbrave.net.RelayListener
 import tn.myapps.zenbrave.net.RelayWebSocketClient
+import tn.myapps.zenbrave.update.AppUpdateManager
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -43,10 +44,12 @@ class MainActivity : AppCompatActivity(), RelayListener {
     private lateinit var prefs: RoomPreferences
     private lateinit var client: RelayWebSocketClient
     private lateinit var adapter: MessageAdapter
+    private lateinit var updateManager: AppUpdateManager
 
     private lateinit var vStatusDot: View
     private lateinit var tvStatusText: TextView
     private lateinit var tvActiveRoomBadge: TextView
+    private lateinit var btnCheckAppUpdate: TextView
     private lateinit var panelConnect: LinearLayout
     private lateinit var etMainRoomCode: EditText
     private lateinit var btnMainJoinRoom: Button
@@ -97,6 +100,7 @@ class MainActivity : AppCompatActivity(), RelayListener {
 
         prefs = RoomPreferences(this)
         client = RelayWebSocketClient(this)
+        updateManager = AppUpdateManager(this)
 
         initViews()
         setupRecyclerView()
@@ -104,12 +108,16 @@ class MainActivity : AppCompatActivity(), RelayListener {
 
         // Auto-connect to server
         connectToServer()
+
+        // Background update check
+        checkForUpdates(isUserInitiated = false)
     }
 
     private fun initViews() {
         vStatusDot = findViewById(R.id.vStatusDot)
         tvStatusText = findViewById(R.id.tvStatusText)
         tvActiveRoomBadge = findViewById(R.id.tvActiveRoomBadge)
+        btnCheckAppUpdate = findViewById(R.id.btnCheckAppUpdate)
         panelConnect = findViewById(R.id.panelConnect)
         etMainRoomCode = findViewById(R.id.etMainRoomCode)
         btnMainJoinRoom = findViewById(R.id.btnMainJoinRoom)
@@ -129,6 +137,12 @@ class MainActivity : AppCompatActivity(), RelayListener {
         tvActiveRoomBadge.setOnClickListener {
             // Toggle connect panel to switch rooms
             panelConnect.visibility = if (panelConnect.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+
+        val (_, initialName) = updateManager.getCurrentVersion()
+        btnCheckAppUpdate.text = "v$initialName 🔄"
+        btnCheckAppUpdate.setOnClickListener {
+            checkForUpdates(isUserInitiated = true)
         }
 
         vStatusDot.setOnClickListener {
@@ -225,6 +239,31 @@ class MainActivity : AppCompatActivity(), RelayListener {
                 }
             }
             mainRecentChipsContainer.addView(chip)
+        }
+    }
+
+    private fun checkForUpdates(isUserInitiated: Boolean) {
+        if (isUserInitiated) {
+            Toast.makeText(this, "Checking for updates...", Toast.LENGTH_SHORT).show()
+        }
+        updateManager.checkForUpdates { result ->
+            result.onSuccess { info ->
+                if (info.isUpdateAvailable) {
+                    btnCheckAppUpdate.text = "Update! 🚀"
+                    btnCheckAppUpdate.setTextColor(ContextCompat.getColor(this, R.color.accent_brave))
+                    updateManager.showUpdateDialog(this, info)
+                } else {
+                    btnCheckAppUpdate.text = "v${info.currentVersionName} 🔄"
+                    btnCheckAppUpdate.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+                    if (isUserInitiated) {
+                        updateManager.showUpdateDialog(this, info)
+                    }
+                }
+            }.onFailure { err ->
+                if (isUserInitiated) {
+                    Toast.makeText(this, "Update check error: ${err.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 

@@ -95,8 +95,27 @@ async function runTests() {
       assert.ok(data.downloads.android.includes('/download/android'));
     });
 
-    // 6. AndroidManifest Intent Filters Verification
-    await test('AndroidManifest.xml contains SEND and SEND_MULTIPLE intent-filters', async () => {
+    // 6. In-App Version & Update Check API
+    await test('Server serves /api/version with versionCode, versionName, downloadUrl, and changelog', async () => {
+      const res = await httpGet('/api/version');
+      assert.strictEqual(res.statusCode, 200);
+      const data = JSON.parse(res.body.toString('utf8'));
+      assert.ok(data.android, 'Response must have android version object');
+      assert.strictEqual(data.android.versionCode, 2, 'Version code should match build 2');
+      assert.strictEqual(data.android.versionName, '1.0.1', 'Version name should be 1.0.1');
+      assert.ok(data.android.downloadUrl.includes('/download/android'), 'Must have direct APK downloadUrl');
+      assert.ok(Array.isArray(data.android.changelog), 'Changelog must be array');
+      assert.ok(data.android.changelog.length > 0, 'Changelog must not be empty');
+
+      // Test alias endpoints
+      const resAlias1 = await httpGet('/download/version');
+      assert.strictEqual(resAlias1.statusCode, 200);
+      const resAlias2 = await httpGet('/version.json');
+      assert.strictEqual(resAlias2.statusCode, 200);
+    });
+
+    // 7. AndroidManifest Intent Filters & Permissions Verification
+    await test('AndroidManifest.xml contains SEND and SEND_MULTIPLE intent-filters and install permission', async () => {
       const manifestPath = path.join(__dirname, '../android/app/src/main/AndroidManifest.xml');
       assert.ok(fs.existsSync(manifestPath), 'AndroidManifest.xml should exist');
       const content = fs.readFileSync(manifestPath, 'utf8');
@@ -104,6 +123,7 @@ async function runTests() {
       // Check permissions
       assert.ok(content.includes('android.permission.INTERNET'), 'Must declare INTERNET');
       assert.ok(content.includes('android.permission.ACCESS_NETWORK_STATE'), 'Must declare ACCESS_NETWORK_STATE');
+      assert.ok(content.includes('android.permission.REQUEST_INSTALL_PACKAGES'), 'Must declare REQUEST_INSTALL_PACKAGES for in-app updates');
 
       // Check ShareActivity and filters
       assert.ok(content.includes('tn.myapps.zenbrave.ui.ShareActivity') || content.includes('.ui.ShareActivity'));

@@ -81,6 +81,39 @@ function createServer(options = {}) {
       return;
     }
 
+    if (url.pathname === '/api/version' || url.pathname === '/download/version' || url.pathname === '/version.json') {
+      const isHttps = req.headers['x-forwarded-proto'] === 'https' ||
+                      req.headers['x-forwarded-ssl'] === 'on' ||
+                      Boolean(req.socket && req.socket.encrypted);
+      const host = req.headers.host || 'zenbrave.myapps.tn';
+      const scheme = isHttps ? 'https://' : 'http://';
+      const apkPath = path.join(__dirname, '../dist/zenbrave-chat.apk');
+      const apkSize = fs.existsSync(apkPath) ? fs.statSync(apkPath).size : 0;
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        android: {
+          versionCode: 2,
+          versionName: '1.0.1',
+          releaseDate: '2026-10-22',
+          apkSize: apkSize,
+          downloadUrl: `${scheme}${host}/download/android`,
+          changelog: [
+            'Interactive full-screen image viewer with pinch-to-zoom and pan',
+            '1-tap save images to Gallery & share to other apps',
+            'In-app update check and 1-tap installation',
+            'Bug fixes for null text and link cards'
+          ]
+        },
+        server: {
+          name: 'Zen & Brave Link & Chat Relay',
+          version: '1.0.1',
+          uptime: Math.round(process.uptime())
+        }
+      }, null, 2));
+      return;
+    }
+
     if (url.pathname === '/') {
       const isHttps = req.headers['x-forwarded-proto'] === 'https' ||
                       req.headers['x-forwarded-ssl'] === 'on' ||
