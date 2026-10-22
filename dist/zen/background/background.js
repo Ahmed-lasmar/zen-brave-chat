@@ -1,0 +1,97 @@
+/**
+ * Cross-browser Background Worker (Service Worker in Brave, Background Script in Zen)
+ * Handles incoming notification alerts, badge counter updates, and notification click actions.
+ */
+
+try {
+  // If in Service Worker / modular context where importScripts is available
+  if (typeof importScripts === 'function') {
+    importScripts('../core/browser-api.js');
+  }
+} catch (e) {
+  // Ignored if bundled or loaded via HTML script tags
+}
+
+const rawApi = typeof browser !== 'undefined' && browser.runtime ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+
+let unreadCount = 0;
+
+function updateBadge(count) {
+  if (!rawApi) return;
+  const actionApi = rawApi.action || rawApi.browserAction;
+  if (!actionApi) return;
+
+  unreadCount = count;
+  const text = unreadCount > 0 ? String(unreadCount) : '';
+
+  try {
+    actionApi.setBadgeText({ text });
+    actionApi.setBadgeBackgroundColor({ color: '#6366f1' });
+  } catch (e) {
+    // Badge error ignored
+  }
+}
+
+if (rawApi && rawApi.runtime && rawApi.runtime.onMessage) {
+  rawApi.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (!request) return;
+
+    if (request.type === 'new-message') {
+      const msg = request.message;
+      unreadCount++;
+      updateBadge(unreadCount);
+
+      // Create desktop notification
+      if (rawApi.notifications && rawApi.notifications.create) {
+        let title = `Zen & Brave: ${msg.senderName || 'Friend'}`;
+        let body = '';
+
+        if (msg.type === 'link' || msg.link) {
+          title = `🔗 Link from ${msg.senderName || 'Friend'}`;
+          body = (msg.link && msg.link.title) || msg.url || 'Shared a link';
+        } else if (msg.type === 'voice' || (msg.media && msg.media.type === 'voice')) {
+          body = '🎤 Sent a voice note';
+        } else if (msg.type === 'media' || msg.media) {
+          body = `📎 Sent ${msg.media.type === 'image' ? 'an image' : 'a file'}: ${msg.media.name || ''}`;
+        } else {
+          body = msg.text || 'Sent a message';
+        }
+
+        try {
+          rawApi.notifications.create(msg.id || 'msg-notify', {
+            type: 'basic',
+            iconUrl: (rawApi.runtime && rawApi.runtime.getURL('ui/icons/icon-128.png')) || '',
+            title: title,
+            message: body,
+            priority: 2
+          });
+        } catch (e) {
+          // Fallback without icon if iconUrl is not resolved
+          try {
+            rawApi.notifications.create({
+              type: 'basic',
+              title: title,
+              message: body
+            });
+          } catch (_) {}
+        }
+      }
+
+      sendResponse({ status: 'ok' });
+      return true;
+    }
+
+    if (request.type === 'clear-badge') {
+      updateBadge(0);
+      sendResponse({ status: 'ok' });
+      return true;
+    }
+  });
+}
+
+// Notification click handler: opens the link if notification was for a link
+if (rawApi && rawApi.notifications && rawApi.notifications.onClicked) {
+  rawApi.notifications.onClicked.addListener((notificationId) => {
+    updateBadge(0);
+  });
+}

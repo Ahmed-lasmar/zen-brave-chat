@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Zen & Brave Link & Chat",
+  "version": "1.0.0",
+  "description": "Cross-browser link sharing, text chat, voice notes, and media transfer between Zen Browser and Brave.",
+  "icons": {
+    "16": "ui/icons/icon-16.png",
+    "32": "ui/icons/icon-32.png",
+    "48": "ui/icons/icon-48.png",
+    "128": "ui/icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Zen & Brave Link Chat",
+    "default_popup": "ui/popup.html",
+    "default_icon": {
+      "16": "ui/icons/icon-16.png",
+      "32": "ui/icons/icon-32.png",
+      "48": "ui/icons/icon-48.png",
+      "128": "ui/icons/icon-128.png"
+    }
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "zen-brave-chat@antigravity",
+      "strict_min_version": "109.0"
+    }
+  },
+  "background": {
+    "scripts": [
+      "background/background.js"
+    ]
+  },
+  "sidebar_action": {
+    "default_panel": "ui/popup.html",
+    "default_title": "Zen & Brave Link Chat",
+    "default_icon": "ui/icons/icon-32.png"
+  },
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "notifications"
+  ]
+}

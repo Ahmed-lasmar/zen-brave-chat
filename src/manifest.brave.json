@@ -1,0 +1,15 @@
+{
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "side_panel": {
+    "default_path": "ui/popup.html"
+  },
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "notifications",
+    "sidePanel"
+  ]
+}

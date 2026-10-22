@@ -1,0 +1,27 @@
+{
+  "name": "zen-brave-link-chat",
+  "version": "1.0.0",
+  "description": "Cross-browser Link & Media Chat extension for Zen Browser and Brave",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "start:server": "node server/index.js",
+    "build": "node scripts/build.js",
+    "test:server": "node tests/server.test.js",
+    "test:storage": "node tests/storage.test.js",
+    "test:manager": "node tests/connection.test.js",
+    "test:connection": "node scripts/test-connection.js",
+    "test": "node tests/server.test.js && node tests/storage.test.js && node tests/connection.test.js && node scripts/test-connection.js"
+  },
+  "keywords": [
+    "zen-browser",
+    "brave",
+    "webextension",
+    "webrtc",
+    "p2p",
+    "chat",
+    "link-sharing"
+  ],
+  "author": "Antigravity",
+  "license": "MIT"
+}
