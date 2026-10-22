@@ -65,6 +65,22 @@ function createServer(options = {}) {
       return;
     }
 
+    if (url.pathname === '/download/android' || url.pathname === '/download/apk') {
+      const filePath = path.join(__dirname, '../dist/zenbrave-chat.apk');
+      if (fs.existsSync(filePath)) {
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.android.package-archive',
+          'Content-Disposition': 'attachment; filename="zenbrave-chat.apk"',
+          'Content-Length': fs.statSync(filePath).size
+        });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'zenbrave-chat.apk not found. Build the Android app first.' }));
+      return;
+    }
+
     if (url.pathname === '/') {
       const isHttps = req.headers['x-forwarded-proto'] === 'https' ||
                       req.headers['x-forwarded-ssl'] === 'on' ||
@@ -92,7 +108,8 @@ function createServer(options = {}) {
         stats: roomManager.getStats(),
         downloads: {
           zen: `https://${host}/download/zen`,
-          brave: `https://${host}/download/brave`
+          brave: `https://${host}/download/brave`,
+          android: `https://${host}/download/android`
         }
       }, null, 2));
       return;

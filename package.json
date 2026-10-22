@@ -7,11 +7,13 @@
     "start": "node server/index.js",
     "start:server": "node server/index.js",
     "build": "node scripts/build.js",
+    "build:android": "./scripts/build-apk.sh",
     "test:server": "node tests/server.test.js",
     "test:storage": "node tests/storage.test.js",
     "test:manager": "node tests/connection.test.js",
+    "test:android": "node tests/android.test.js",
     "test:connection": "node scripts/test-connection.js",
-    "test": "node tests/server.test.js && node tests/storage.test.js && node tests/connection.test.js && node scripts/test-connection.js"
+    "test": "node tests/server.test.js && node tests/storage.test.js && node tests/connection.test.js && node tests/android.test.js && node scripts/test-connection.js"
   },
   "keywords": [
     "zen-browser",

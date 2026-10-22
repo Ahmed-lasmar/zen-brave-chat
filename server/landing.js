@@ -78,11 +78,11 @@ function renderLandingPage(wsEndpoint, stats = {}) {
     }
     .cards-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
       margin-bottom: 30px;
     }
-    @media (max-width: 680px) {
+    @media (max-width: 820px) {
       .cards-grid { grid-template-columns: 1fr; }
     }
     .download-card {
@@ -178,6 +178,11 @@ function renderLandingPage(wsEndpoint, stats = {}) {
       color: #fff;
     }
     .btn-brave:hover { background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); }
+    .btn-android {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #fff;
+    }
+    .btn-android:hover { background: linear-gradient(135deg, #059669 0%, #047857 100%); }
     .how-to {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -274,6 +279,28 @@ function renderLandingPage(wsEndpoint, stats = {}) {
         <a href="/download/brave" class="btn btn-brave">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Download for Brave (.zip)
+        </a>
+      </div>
+
+      <!-- Android Card -->
+      <div class="download-card">
+        <div>
+          <div class="card-header">
+            <span class="card-icon">📱</span>
+            <div>
+              <div class="card-title">Android Mobile App</div>
+              <div class="card-meta">System Share Target &bull; Mobile Chat</div>
+            </div>
+          </div>
+          <ul class="steps">
+            <li><span class="step-num">1</span> Download & install <code>.apk</code> on your phone</li>
+            <li><span class="step-num">2</span> Open YouTube, X/Twitter, Chrome, or TikTok</li>
+            <li><span class="step-num">3</span> Tap <strong>"Share"</strong> &amp; choose <strong>Zen &amp; Brave</strong> to beam directly!</li>
+          </ul>
+        </div>
+        <a href="/download/android" class="btn btn-android">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Download for Android (.apk)
         </a>
       </div>
     </div>

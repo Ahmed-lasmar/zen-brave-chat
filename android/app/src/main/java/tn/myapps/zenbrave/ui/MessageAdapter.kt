@@ -1,0 +1,164 @@
+package tn.myapps.zenbrave.ui
+
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.RecyclerView
+import tn.myapps.zenbrave.R
+import tn.myapps.zenbrave.model.ChatMessage
+import java.text.SimpleDateFormat
+import java.util.*
+
+class MessageAdapter(
+    private val context: Context,
+    private val messages: MutableList<ChatMessage> = mutableListOf()
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    companion object {
+        private const val TYPE_TEXT = 1
+        private const val TYPE_LINK = 2
+        private const val TYPE_IMAGE = 3
+        private const val TYPE_SYSTEM = 4
+        private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+    }
+
+    override fun getItemViewType(position: Int): Int {
+        val msg = messages[position]
+        return when (msg.type) {
+            "system" -> TYPE_SYSTEM
+            "link" -> TYPE_LINK
+            "image" -> TYPE_IMAGE
+            else -> if (msg.url != null) TYPE_LINK else if (msg.media != null) TYPE_IMAGE else TYPE_TEXT
+        }
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return when (viewType) {
+            TYPE_LINK -> LinkViewHolder(inflater.inflate(R.layout.item_message_link, parent, false))
+            TYPE_IMAGE -> ImageViewHolder(inflater.inflate(R.layout.item_message_image, parent, false))
+            TYPE_SYSTEM -> SystemViewHolder(inflater.inflate(R.layout.item_message_system, parent, false))
+            else -> TextViewHolder(inflater.inflate(R.layout.item_message_text, parent, false))
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        val msg = messages[position]
+        when (holder) {
+            is TextViewHolder -> holder.bind(msg)
+            is LinkViewHolder -> holder.bind(msg)
+            is ImageViewHolder -> holder.bind(msg)
+            is SystemViewHolder -> holder.bind(msg)
+        }
+    }
+
+    override fun getItemCount(): Int = messages.size
+
+    fun addMessage(message: ChatMessage) {
+        messages.add(message)
+        notifyItemInserted(messages.size - 1)
+    }
+
+    fun setMessages(newMessages: List<ChatMessage>) {
+        messages.clear()
+        messages.addAll(newMessages)
+        notifyDataSetChanged()
+    }
+
+    inner class TextViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val row: LinearLayout = itemView.findViewById(R.id.llMessageRow)
+        private val container: LinearLayout = itemView.findViewById(R.id.llBubbleContainer)
+        private val tvSender: TextView = itemView.findViewById(R.id.tvSenderName)
+        private val tvText: TextView = itemView.findViewById(R.id.tvMessageText)
+        private val tvTime: TextView = itemView.findViewById(R.id.tvTimestamp)
+
+        fun bind(msg: ChatMessage) {
+            tvText.text = msg.text
+            tvTime.text = timeFormatter.format(Date(msg.timestamp))
+
+            if (msg.isOutgoing) {
+                row.gravity = Gravity.END
+                container.gravity = Gravity.END
+                tvSender.visibility = View.GONE
+                tvText.background = ContextCompat.getDrawable(context, R.drawable.bg_bubble_outgoing)
+                tvText.setTextColor(ContextCompat.getColor(context, R.color.white))
+            } else {
+                row.gravity = Gravity.START
+                container.gravity = Gravity.START
+                tvSender.visibility = View.VISIBLE
+                tvSender.text = "${msg.senderName} (${msg.browser})"
+                tvText.background = ContextCompat.getDrawable(context, R.drawable.bg_bubble_incoming)
+                tvText.setTextColor(ContextCompat.getColor(context, R.color.text_primary))
+            }
+        }
+    }
+
+    inner class LinkViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val row: LinearLayout = itemView.findViewById(R.id.llLinkRow)
+        private val tvSender: TextView = itemView.findViewById(R.id.tvLinkSender)
+        private val tvDomain: TextView = itemView.findViewById(R.id.tvLinkDomain)
+        private val tvTitle: TextView = itemView.findViewById(R.id.tvLinkTitle)
+        private val tvUrl: TextView = itemView.findViewById(R.id.tvLinkUrl)
+        private val btnOpen: Button = itemView.findViewById(R.id.btnOpenLink)
+
+        fun bind(msg: ChatMessage) {
+            row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
+            tvSender.text = if (msg.isOutgoing) "You" else "${msg.senderName} (${msg.browser})"
+            tvDomain.text = msg.domain ?: "WEB"
+            tvTitle.text = msg.title ?: msg.url ?: "Link"
+            tvUrl.text = msg.url ?: ""
+
+            btnOpen.setOnClickListener {
+                msg.url?.let { linkUrl ->
+                    try {
+                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(linkUrl))
+                        context.startActivity(browserIntent)
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+    }
+
+    inner class ImageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val row: LinearLayout = itemView.findViewById(R.id.llImageRow)
+        private val tvSender: TextView = itemView.findViewById(R.id.tvImageSender)
+        private val ivImage: ImageView = itemView.findViewById(R.id.ivMessageImage)
+
+        fun bind(msg: ChatMessage) {
+            row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
+            tvSender.text = if (msg.isOutgoing) "You" else "${msg.senderName} (${msg.browser})"
+
+            val rawData = msg.media?.data ?: ""
+            if (rawData.isNotEmpty()) {
+                val cleanBase64 = if (rawData.contains(",")) rawData.substringAfter(",") else rawData
+                try {
+                    val decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+                    val bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                    ivImage.setImageBitmap(bitmap)
+                } catch (_: Exception) {
+                    ivImage.setImageResource(R.mipmap.ic_launcher)
+                }
+            }
+        }
+    }
+
+    inner class SystemViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val tvText: TextView = itemView.findViewById(R.id.tvSystemText)
+
+        fun bind(msg: ChatMessage) {
+            tvText.text = msg.text
+        }
+    }
+}

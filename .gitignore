@@ -5,3 +5,10 @@ server/data/
 *.log
 tests/temp-*.json
 scripts/e2e-storage.json
+
+# Android build outputs & local properties
+android/.gradle/
+android/build/
+android/*/build/
+android/.kotlin/
+android/local.properties

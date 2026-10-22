@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Zen &amp; Brave Chat</string>
+    <string name="share_target_label">Send to Zen &amp; Brave</string>
+    <string name="connecting">Connecting...</string>
+    <string name="connected">Online</string>
+    <string name="disconnected">Offline</string>
+    <string name="send">Send</string>
+    <string name="share_dialog_title">Beam to Desktop Browsers</string>
+    <string name="ask_room_prompt">Which room do you want to send to?</string>
+    <string name="room_code_hint">Room code (e.g. ZEN-8921)</string>
+    <string name="type_a_message">Type a message...</string>
+    <string name="join_room">Join Room</string>
+    <string name="create_room">Create New Room</string>
+    <string name="recent_rooms">Recent Rooms:</string>
+    <string name="open_link">Open Link</string>
+</resources>
