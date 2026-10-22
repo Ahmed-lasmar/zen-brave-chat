@@ -148,6 +148,15 @@ function main() {
   buildTarget('zen', 'manifest.zen.json');
   buildTarget('brave', 'manifest.brave.json');
 
+  // Package zip archives for quick friend distribution
+  try {
+    const { execSync } = require('child_process');
+    execSync(`cd "${DIST_DIR}" && zip -r -q zen-extension.zip zen/ && zip -r -q brave-extension.zip brave/`, { stdio: 'ignore' });
+    console.log('📦 Packaged zip downloads: dist/zen-extension.zip & dist/brave-extension.zip');
+  } catch (err) {
+    // optional packaging
+  }
+
   console.log('\n======================================================');
   console.log('🎉 All extension builds generated successfully!');
   console.log('------------------------------------------------------');

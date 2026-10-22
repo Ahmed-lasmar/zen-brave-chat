@@ -1,6 +1,9 @@
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const { WebSocketServer } = require('./websocket');
 const { RoomManager } = require('./rooms');
+const { renderLandingPage } = require('./landing');
 
 function createServer(options = {}) {
   const roomManager = new RoomManager(options);
@@ -30,6 +33,38 @@ function createServer(options = {}) {
       return;
     }
 
+    if (url.pathname === '/download/zen') {
+      const filePath = path.join(__dirname, '../dist/zen-extension.zip');
+      if (fs.existsSync(filePath)) {
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': 'attachment; filename="zen-chat-extension.zip"',
+          'Content-Length': fs.statSync(filePath).size
+        });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'zen-extension.zip not found. Run npm run build first.' }));
+      return;
+    }
+
+    if (url.pathname === '/download/brave') {
+      const filePath = path.join(__dirname, '../dist/brave-extension.zip');
+      if (fs.existsSync(filePath)) {
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': 'attachment; filename="brave-chat-extension.zip"',
+          'Content-Length': fs.statSync(filePath).size
+        });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'brave-extension.zip not found. Run npm run build first.' }));
+      return;
+    }
+
     if (url.pathname === '/') {
       const isHttps = req.headers['x-forwarded-proto'] === 'https' ||
                       req.headers['x-forwarded-ssl'] === 'on' ||
@@ -38,13 +73,27 @@ function createServer(options = {}) {
       const host = req.headers.host || 'localhost:3000';
       const wsEndpoint = wsProto + host;
 
+      const wantsHtml = req.headers.accept &&
+                        req.headers.accept.includes('text/html') &&
+                        !url.searchParams.has('json');
+
+      if (wantsHtml) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(renderLandingPage(wsEndpoint, roomManager.getStats()));
+        return;
+      }
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         name: 'Zen & Brave Link & Chat Relay Server',
         version: '1.0.0',
         status: 'running',
         wsEndpoint: wsEndpoint,
-        stats: roomManager.getStats()
+        stats: roomManager.getStats(),
+        downloads: {
+          zen: `https://${host}/download/zen`,
+          brave: `https://${host}/download/brave`
+        }
       }, null, 2));
       return;
     }
