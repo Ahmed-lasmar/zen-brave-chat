@@ -192,6 +192,71 @@ async function runConnectionTests() {
       assert.notStrictEqual(conn1Role, conn2Role, 'Roles must be strictly opposite to prevent offer collisions');
     });
 
+    // 6. Reply to Message by Text / Emoji and Reaction
+    await test('ConnectionManager sends replyTo and sends emoji reactions', async () => {
+      const connA = new ConnectionManager({
+        serverUrl: wsUrl,
+        userName: 'Alice',
+        peerId: 'peer-alice-rply',
+        WebSocket: NodeWebSocketAdapter
+      });
+
+      const connB = new ConnectionManager({
+        serverUrl: wsUrl,
+        userName: 'Bob',
+        peerId: 'peer-bob-rply',
+        WebSocket: NodeWebSocketAdapter
+      });
+
+      const testRoom = 'ZEN-RPLYTEST';
+      let bReceived = [];
+      let bReactions = [];
+
+      connB.on('message', (msg) => {
+        bReceived.push(msg);
+      });
+
+      connB.on('reaction', (data) => {
+        bReactions.push(data);
+      });
+
+      await connA.joinRoom(testRoom, 'Alice');
+      await connB.joinRoom(testRoom, 'Bob');
+      await new Promise(r => setTimeout(r, 100));
+
+      // Alice sends a reply message to Bob's original text
+      connA.sendMessage({
+        id: 'reply-msg-123',
+        type: 'text',
+        text: 'Great idea! 🚀',
+        replyTo: {
+          id: 'orig-msg-001',
+          senderName: 'Bob',
+          text: 'Shall we deploy?'
+        }
+      });
+      await new Promise(r => setTimeout(r, 100));
+
+      assert.strictEqual(bReceived.length, 1);
+      assert.strictEqual(bReceived[0].text, 'Great idea! 🚀');
+      assert.ok(bReceived[0].replyTo, 'Received message must have replyTo');
+      assert.strictEqual(bReceived[0].replyTo.senderName, 'Bob');
+      assert.strictEqual(bReceived[0].replyTo.text, 'Shall we deploy?');
+
+      // Bob reacts with ❤️ to Alice's reply
+      connB.sendReaction('reply-msg-123', '❤️');
+      await new Promise(r => setTimeout(r, 100));
+
+      assert.strictEqual(bReactions.length, 1, 'Bob should receive reaction event broadcast');
+      assert.strictEqual(bReactions[0].targetMessageId, 'reply-msg-123');
+      assert.strictEqual(bReactions[0].emoji, '❤️');
+
+      connA.leaveRoom();
+      connB.leaveRoom();
+      if (connA.ws) connA.ws.close();
+      if (connB.ws) connB.ws.close();
+    });
+
   } finally {
     await app.close();
     if (fs.existsSync(testStorage)) {
