@@ -2,7 +2,7 @@ package tn.myapps.zenbrave.model
 
 data class ChatMessage(
     val id: String = "msg-${System.currentTimeMillis()}-${(1000..9999).random()}",
-    val type: String = "text", // "text", "link", "image", "system"
+    val type: String = "text", // "text", "link", "image", "system", "voice"
     val text: String = "",
     val url: String? = null,
     val title: String? = null,
@@ -13,7 +13,16 @@ data class ChatMessage(
     val senderName: String = "Android",
     val browser: String = "Android",
     val timestamp: Long = System.currentTimeMillis(),
-    val isOutgoing: Boolean = false
+    val isOutgoing: Boolean = false,
+    val replyTo: ReplyPayload? = null,
+    val reactions: Map<String, List<String>> = emptyMap()
+)
+
+data class ReplyPayload(
+    val id: String,
+    val senderName: String,
+    val text: String,
+    val type: String = "text"
 )
 
 data class MediaPayload(

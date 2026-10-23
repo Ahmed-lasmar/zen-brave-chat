@@ -19,6 +19,7 @@ interface RelayListener {
     fun onPeerLeft(peerId: String, name: String) {}
     fun onPeerUpdated(peer: PeerInfo, oldName: String) {}
     fun onMessageReceived(message: ChatMessage) {}
+    fun onReactionReceived(targetMessageId: String, reactions: Map<String, List<String>>, emoji: String, senderName: String) {}
     fun onMessageAck(messageId: String) {}
     fun onError(error: String) {}
 }
@@ -188,6 +189,16 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
                 put("media", mediaObj)
             }
 
+            if (msg.replyTo != null) {
+                val replyObj = JSONObject().apply {
+                    put("id", msg.replyTo.id)
+                    put("senderName", msg.replyTo.senderName)
+                    put("text", msg.replyTo.text)
+                    put("type", msg.replyTo.type)
+                }
+                put("replyTo", replyObj)
+            }
+
             put("senderId", msg.senderId)
             put("senderName", msg.senderName)
             put("browser", "Android")
@@ -206,6 +217,25 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
             onSent?.invoke()
         }
         return sent
+    }
+
+    fun sendReaction(roomId: String, targetMessageId: String, emoji: String, senderId: String, senderName: String): Boolean {
+        if (!isConnected || webSocket == null) return false
+        val payload = JSONObject().apply {
+            put("type", "reaction")
+            put("targetMessageId", targetMessageId)
+            put("emoji", emoji)
+            put("senderId", senderId)
+            put("senderName", senderName)
+            put("timestamp", System.currentTimeMillis())
+        }
+        val envelope = JSONObject().apply {
+            put("type", "relay-message")
+            put("roomId", roomId.trim().uppercase())
+            put("senderId", senderId)
+            put("payload", payload)
+        }
+        return webSocket?.send(envelope.toString()) ?: false
     }
 
     fun leaveRoom() {
@@ -311,6 +341,29 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
                     }
                 }
 
+                "message-reaction" -> {
+                    val targetMessageId = json.optString("targetMessageId")
+                    val emoji = json.optString("emoji")
+                    val senderName = json.optString("senderName", "Friend")
+                    val reactionsObj = json.optJSONObject("reactions")
+                    val reactionsMap = mutableMapOf<String, List<String>>()
+                    if (reactionsObj != null) {
+                        val keys = reactionsObj.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            val arr = reactionsObj.optJSONArray(key)
+                            if (arr != null) {
+                                val list = mutableListOf<String>()
+                                for (i in 0 until arr.length()) {
+                                    list.add(arr.optString(i))
+                                }
+                                reactionsMap[key] = list
+                            }
+                        }
+                    }
+                    listener?.onReactionReceived(targetMessageId, reactionsMap, emoji, senderName)
+                }
+
                 "ack" -> {
                     val messageId = json.optString("messageId")
                     listener?.onMessageAck(messageId)
@@ -369,6 +422,32 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
 
         val text = obj.optCleanString("text") ?: ""
 
+        val replyObj = obj.optJSONObject("replyTo")
+        val replyTo = if (replyObj != null) {
+            val rId = replyObj.optCleanString("id") ?: ""
+            val rSender = replyObj.optCleanString("senderName") ?: "Friend"
+            val rText = replyObj.optCleanString("text") ?: ""
+            val rType = replyObj.optCleanString("type") ?: "text"
+            tn.myapps.zenbrave.model.ReplyPayload(id = rId, senderName = rSender, text = rText, type = rType)
+        } else null
+
+        val reactionsObj = obj.optJSONObject("reactions")
+        val reactionsMap = mutableMapOf<String, List<String>>()
+        if (reactionsObj != null) {
+            val keys = reactionsObj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val arr = reactionsObj.optJSONArray(key)
+                if (arr != null) {
+                    val list = mutableListOf<String>()
+                    for (i in 0 until arr.length()) {
+                        list.add(arr.optString(i))
+                    }
+                    reactionsMap[key] = list
+                }
+            }
+        }
+
         return ChatMessage(
             id = obj.optCleanString("id") ?: "msg-${System.currentTimeMillis()}",
             type = finalType,
@@ -382,7 +461,9 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
             senderName = obj.optCleanString("senderName") ?: "Friend",
             browser = obj.optCleanString("browser") ?: "Browser",
             timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
-            isOutgoing = sId == myPeerId
+            isOutgoing = sId == myPeerId,
+            replyTo = replyTo,
+            reactions = reactionsMap
         )
     }
 }

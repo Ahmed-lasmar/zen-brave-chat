@@ -1,5 +1,6 @@
 package tn.myapps.zenbrave.ui
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -27,7 +28,9 @@ import java.util.*
 
 class MessageAdapter(
     private val context: Context,
-    private val messages: MutableList<ChatMessage> = mutableListOf()
+    private val messages: MutableList<ChatMessage> = mutableListOf(),
+    var onReplyListener: ((ChatMessage) -> Unit)? = null,
+    var onReactionListener: ((ChatMessage, String) -> Unit)? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -93,6 +96,19 @@ class MessageAdapter(
         notifyDataSetChanged()
     }
 
+    fun updateReactions(targetMessageId: String, reactions: Map<String, List<String>>) {
+        val idx = messages.indexOfFirst { it.id == targetMessageId }
+        if (idx != -1) {
+            val updated = messages[idx].copy(reactions = reactions)
+            messages[idx] = updated
+            notifyItemChanged(idx)
+        }
+    }
+
+    fun findMessagePosition(id: String): Int {
+        return messages.indexOfFirst { it.id == id }
+    }
+
     private fun formatSender(msg: ChatMessage): String {
         if (msg.isOutgoing) return "You"
         val name = if (msg.senderName.isNotBlank() && !msg.senderName.equals("null", ignoreCase = true)) msg.senderName else "Friend"
@@ -103,12 +119,97 @@ class MessageAdapter(
         }
     }
 
+    private fun bindQuotedReply(layout: View?, msg: ChatMessage) {
+        if (layout == null) return
+        val reply = msg.replyTo
+        if (reply != null) {
+            layout.visibility = View.VISIBLE
+            val tvSender = layout.findViewById<TextView>(R.id.tvQuotedSender)
+            val tvText = layout.findViewById<TextView>(R.id.tvQuotedText)
+            tvSender?.text = reply.senderName
+            tvText?.text = reply.text
+            layout.setOnClickListener {
+                val targetIdx = findMessagePosition(reply.id)
+                if (targetIdx != -1) {
+                    (context as? MainActivity)?.scrollToMessage(targetIdx)
+                } else {
+                    Toast.makeText(context, "Quoted message not in active list", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            layout.visibility = View.GONE
+        }
+    }
+
+    private fun bindReactions(layout: LinearLayout?, msg: ChatMessage) {
+        if (layout == null) return
+        layout.removeAllViews()
+        if (msg.reactions.isEmpty()) {
+            layout.visibility = View.GONE
+            return
+        }
+
+        layout.visibility = View.VISIBLE
+        for ((emoji, senders) in msg.reactions) {
+            if (senders.isEmpty()) continue
+            val chip = TextView(context).apply {
+                text = "$emoji ${senders.size}"
+                textSize = 11f
+                setTextColor(ContextCompat.getColor(context, R.color.text_primary))
+                val isMine = senders.contains("You") || senders.contains((context as? MainActivity)?.getCurrentUserName())
+                background = ContextCompat.getDrawable(context, if (isMine) R.drawable.bg_reaction_chip_active else R.drawable.bg_reaction_chip)
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 0, 8, 0)
+                }
+                layoutParams = params
+                setOnClickListener {
+                    onReactionListener?.invoke(msg, emoji)
+                }
+            }
+            layout.addView(chip)
+        }
+    }
+
+    private fun showMessageActionsDialog(msg: ChatMessage) {
+        val options = arrayOf(
+            "↩️ Reply to this message",
+            "👍 React with 👍",
+            "❤️ React with ❤️",
+            "😂 React with 😂",
+            "🔥 React with 🔥",
+            "🎉 React with 🎉",
+            "😮 React with 😮",
+            "😢 React with 😢"
+        )
+        AlertDialog.Builder(context)
+            .setTitle("Message Actions")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> onReplyListener?.invoke(msg)
+                    1 -> onReactionListener?.invoke(msg, "👍")
+                    2 -> onReactionListener?.invoke(msg, "❤️")
+                    3 -> onReactionListener?.invoke(msg, "😂")
+                    4 -> onReactionListener?.invoke(msg, "🔥")
+                    5 -> onReactionListener?.invoke(msg, "🎉")
+                    6 -> onReactionListener?.invoke(msg, "😮")
+                    7 -> onReactionListener?.invoke(msg, "😢")
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     inner class TextViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val row: LinearLayout = itemView.findViewById(R.id.llMessageRow)
         private val container: LinearLayout = itemView.findViewById(R.id.llBubbleContainer)
         private val tvSender: TextView = itemView.findViewById(R.id.tvSenderName)
         private val tvText: TextView = itemView.findViewById(R.id.tvMessageText)
         private val tvTime: TextView = itemView.findViewById(R.id.tvTimestamp)
+        private val llQuotedReply: View? = itemView.findViewById(R.id.llQuotedReply)
+        private val llReactions: LinearLayout? = itemView.findViewById(R.id.llReactions)
 
         fun bind(msg: ChatMessage) {
             tvText.text = msg.text
@@ -128,16 +229,29 @@ class MessageAdapter(
                 tvText.background = ContextCompat.getDrawable(context, R.drawable.bg_bubble_incoming)
                 tvText.setTextColor(ContextCompat.getColor(context, R.color.text_primary))
             }
+
+            bindQuotedReply(llQuotedReply, msg)
+            bindReactions(llReactions, msg)
+
+            val showActions = View.OnLongClickListener {
+                showMessageActionsDialog(msg)
+                true
+            }
+            tvText.setOnLongClickListener(showActions)
+            container.setOnLongClickListener(showActions)
         }
     }
 
     inner class LinkViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val row: LinearLayout = itemView.findViewById(R.id.llLinkRow)
+        private val container: View = itemView.findViewById(R.id.llLinkContainer)
         private val tvSender: TextView = itemView.findViewById(R.id.tvLinkSender)
         private val tvDomain: TextView = itemView.findViewById(R.id.tvLinkDomain)
         private val tvTitle: TextView = itemView.findViewById(R.id.tvLinkTitle)
         private val tvUrl: TextView = itemView.findViewById(R.id.tvLinkUrl)
         private val btnOpen: View = itemView.findViewById(R.id.btnOpenLink)
+        private val llQuotedReply: View? = itemView.findViewById(R.id.llQuotedReply)
+        private val llReactions: LinearLayout? = itemView.findViewById(R.id.llReactions)
 
         fun bind(msg: ChatMessage) {
             row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
@@ -168,6 +282,15 @@ class MessageAdapter(
                     }
                 }
             }
+
+            bindQuotedReply(llQuotedReply, msg)
+            bindReactions(llReactions, msg)
+
+            val showActions = View.OnLongClickListener {
+                showMessageActionsDialog(msg)
+                true
+            }
+            container.setOnLongClickListener(showActions)
         }
     }
 
@@ -177,6 +300,8 @@ class MessageAdapter(
         private val tvSender: TextView = itemView.findViewById(R.id.tvImageSender)
         private val tvTime: TextView? = itemView.findViewById(R.id.tvImageTime)
         private val ivImage: ImageView = itemView.findViewById(R.id.ivMessageImage)
+        private val llQuotedReply: View? = itemView.findViewById(R.id.llQuotedReply)
+        private val llReactions: LinearLayout? = itemView.findViewById(R.id.llReactions)
 
         fun bind(msg: ChatMessage) {
             row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
@@ -211,15 +336,27 @@ class MessageAdapter(
 
             ivImage.setOnClickListener(openViewerAction)
             cardContainer?.setOnClickListener(openViewerAction)
+
+            bindQuotedReply(llQuotedReply, msg)
+            bindReactions(llReactions, msg)
+
+            val showActions = View.OnLongClickListener {
+                showMessageActionsDialog(msg)
+                true
+            }
+            cardContainer?.setOnLongClickListener(showActions)
         }
     }
 
     inner class VoiceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val row: LinearLayout = itemView.findViewById(R.id.llVoiceRow)
+        private val container: View = itemView.findViewById(R.id.llVoiceContainer)
         private val tvSender: TextView = itemView.findViewById(R.id.tvVoiceSender)
         private val tvTitle: TextView = itemView.findViewById(R.id.tvVoiceTitle)
         private val tvMeta: TextView = itemView.findViewById(R.id.tvVoiceMeta)
         private val btnPlay: ImageButton = itemView.findViewById(R.id.btnVoicePlay)
+        private val llQuotedReply: View? = itemView.findViewById(R.id.llQuotedReply)
+        private val llReactions: LinearLayout? = itemView.findViewById(R.id.llReactions)
 
         fun bind(msg: ChatMessage) {
             row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
@@ -236,6 +373,15 @@ class MessageAdapter(
             btnPlay.setOnClickListener {
                 toggleAudioPlayback(msg)
             }
+
+            bindQuotedReply(llQuotedReply, msg)
+            bindReactions(llReactions, msg)
+
+            val showActions = View.OnLongClickListener {
+                showMessageActionsDialog(msg)
+                true
+            }
+            container.setOnLongClickListener(showActions)
         }
     }
 

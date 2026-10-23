@@ -344,6 +344,80 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <!-- Reply Preview Banner (Hidden by default) -->
+    <LinearLayout
+        android:id="@+id/layoutReplyPreview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_variant"
+        android:orientation="vertical"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="match_parent"
+                android:background="@color/accent_purple" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvReplyUser"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Replying to Friend"
+                    android:textColor="@color/accent_purple"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvReplySnippet"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Message snippet..."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btnCancelReply"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Cancel reply"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:tint="@color/text_muted" />
+        </LinearLayout>
+
+        <!-- Quick emoji reply buttons bar -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/layoutReplyQuickEmojis"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
     <!-- Bottom Input Bar -->
     <LinearLayout
         android:id="@+id/bottomBar"
@@ -375,6 +449,18 @@
             android:contentDescription="Record voice note"
             android:src="@android:drawable/ic_btn_speak_now"
             android:tint="@color/accent_purple" />
+
+        <!-- Emoji Picker Button -->
+        <TextView
+            android:id="@+id/btnEmojiPicker"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_btn_secondary"
+            android:contentDescription="Insert emoji"
+            android:gravity="center"
+            android:text="😀"
+            android:textSize="18sp" />
 
         <!-- Message Input -->
         <EditText

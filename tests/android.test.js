@@ -326,6 +326,40 @@ async function runTests() {
       receiver.close();
     });
 
+    // 15. Message Reply & Emoji Reaction Architecture on Android
+    await test('Android supports replying by text or emoji and message reactions', async () => {
+      // 1. Model support
+      const modelsPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/model/MessageModels.kt');
+      const modelsCode = fs.readFileSync(modelsPath, 'utf8');
+      assert.ok(modelsCode.includes('data class ReplyPayload'), 'Must define ReplyPayload data class');
+      assert.ok(modelsCode.includes('val replyTo: ReplyPayload?'), 'ChatMessage must include replyTo field');
+      assert.ok(modelsCode.includes('val reactions: Map<String, List<String>>'), 'ChatMessage must include reactions map');
+
+      // 2. Layout support
+      const mainLayoutPath = path.join(__dirname, '../android/app/src/main/res/layout/activity_main.xml');
+      const mainLayoutCode = fs.readFileSync(mainLayoutPath, 'utf8');
+      assert.ok(mainLayoutCode.includes('layoutReplyPreview'), 'activity_main.xml must include layoutReplyPreview');
+      assert.ok(mainLayoutCode.includes('layoutReplyQuickEmojis'), 'activity_main.xml must include quick emoji reply bar');
+      assert.ok(mainLayoutCode.includes('btnEmojiPicker'), 'activity_main.xml must include btnEmojiPicker');
+
+      const textLayoutPath = path.join(__dirname, '../android/app/src/main/res/layout/item_message_text.xml');
+      const textLayoutCode = fs.readFileSync(textLayoutPath, 'utf8');
+      assert.ok(textLayoutCode.includes('llQuotedReply'), 'item_message_text.xml must include llQuotedReply');
+      assert.ok(textLayoutCode.includes('llReactions'), 'item_message_text.xml must include llReactions');
+
+      // 3. Adapter & Networking
+      const adapterPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/ui/MessageAdapter.kt');
+      const adapterCode = fs.readFileSync(adapterPath, 'utf8');
+      assert.ok(adapterCode.includes('bindQuotedReply'), 'MessageAdapter must bind quoted replies');
+      assert.ok(adapterCode.includes('bindReactions'), 'MessageAdapter must bind reaction pills');
+      assert.ok(adapterCode.includes('updateReactions'), 'MessageAdapter must support updateReactions');
+
+      const clientPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/net/RelayWebSocketClient.kt');
+      const clientCode = fs.readFileSync(clientPath, 'utf8');
+      assert.ok(clientCode.includes('sendReaction'), 'RelayWebSocketClient must implement sendReaction');
+      assert.ok(clientCode.includes('onReactionReceived'), 'RelayListener must have onReactionReceived');
+    });
+
   } finally {
     await app.close();
     if (fs.existsSync(testStoragePath)) {

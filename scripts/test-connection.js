@@ -251,6 +251,49 @@ async function runEndToEndSimulation() {
     assert.strictEqual(zenSawPeerUpdate.oldName, 'Brave Friend');
     console.log('✅ Step 6: Custom username synchronized live across peers');
 
+    // 9. Reply to Message by Text / Emoji and Reaction Simulation
+    console.log('[E2E] Zen replies to Brave with text and emoji...');
+    let braveReceivedReply = null;
+    clientBrave2.on('message', (msg) => {
+      if (msg.replyTo) {
+        braveReceivedReply = msg;
+      }
+    });
+
+    const replyMessage = {
+      id: 'msg-reply-e2e-1',
+      type: 'text',
+      text: 'Thanks for searching! 👍🔥',
+      replyTo: {
+        id: 'link-offline-3',
+        senderName: 'Brave PowerUser',
+        text: 'Brave Search Engine',
+        type: 'link'
+      },
+      timestamp: Date.now()
+    };
+    clientZen.sendMessage(replyMessage);
+    await new Promise(r => setTimeout(r, 120));
+
+    assert.ok(braveReceivedReply, 'Brave should receive quoted reply message');
+    assert.strictEqual(braveReceivedReply.text, 'Thanks for searching! 👍🔥');
+    assert.strictEqual(braveReceivedReply.replyTo.id, 'link-offline-3');
+
+    // Brave reacts with ❤️ emoji to Zen's reply
+    console.log('[E2E] Brave reacts to Zen reply with emoji...');
+    let zenReceivedReaction = null;
+    clientZen.on('reaction', (data) => {
+      zenReceivedReaction = data;
+    });
+
+    clientBrave2.sendReaction('msg-reply-e2e-1', '❤️');
+    await new Promise(r => setTimeout(r, 120));
+
+    assert.ok(zenReceivedReaction, 'Zen should receive reaction update event');
+    assert.strictEqual(zenReceivedReaction.targetMessageId, 'msg-reply-e2e-1');
+    assert.strictEqual(zenReceivedReaction.emoji, '❤️');
+    console.log('✅ Step 7: Reply by text/emoji and emoji reaction verified across peers');
+
     clientZen.leaveRoom();
     clientBrave2.leaveRoom();
     if (clientZen.ws) clientZen.ws.close();

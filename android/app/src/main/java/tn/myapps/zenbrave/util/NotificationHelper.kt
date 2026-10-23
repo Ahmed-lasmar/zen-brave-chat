@@ -66,6 +66,10 @@ object NotificationHelper {
         }
 
         val previewText = when {
+            message.replyTo != null -> {
+                val replySnippet = message.text.ifBlank { "Replied to ${message.replyTo.senderName}" }
+                "↩️ [Reply to ${message.replyTo.senderName}] $replySnippet"
+            }
             message.type == "link" || !message.url.isNullOrEmpty() -> {
                 val title = message.title?.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
                 val url = message.url ?: ""

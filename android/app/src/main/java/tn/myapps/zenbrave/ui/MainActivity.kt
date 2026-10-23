@@ -82,6 +82,14 @@ class MainActivity : AppCompatActivity(), RelayListener {
     private lateinit var btnVoiceCancel: Button
     private lateinit var btnVoiceSend: Button
 
+    private lateinit var layoutReplyPreview: LinearLayout
+    private lateinit var tvReplyUser: TextView
+    private lateinit var tvReplySnippet: TextView
+    private lateinit var btnCancelReply: ImageButton
+    private lateinit var layoutReplyQuickEmojis: LinearLayout
+    private lateinit var btnEmojiPicker: TextView
+    private var currentReplyTarget: tn.myapps.zenbrave.model.ReplyPayload? = null
+
     private var mediaRecorder: MediaRecorder? = null
     private var isRecordingVoice = false
     private var recordingStartTime = 0L
@@ -258,6 +266,23 @@ class MainActivity : AppCompatActivity(), RelayListener {
         btnVoiceCancel = findViewById(R.id.btnVoiceCancel)
         btnVoiceSend = findViewById(R.id.btnVoiceSend)
 
+        layoutReplyPreview = findViewById(R.id.layoutReplyPreview)
+        tvReplyUser = findViewById(R.id.tvReplyUser)
+        tvReplySnippet = findViewById(R.id.tvReplySnippet)
+        btnCancelReply = findViewById(R.id.btnCancelReply)
+        layoutReplyQuickEmojis = findViewById(R.id.layoutReplyQuickEmojis)
+        btnEmojiPicker = findViewById(R.id.btnEmojiPicker)
+
+        btnCancelReply.setOnClickListener {
+            clearReplyTarget()
+        }
+
+        setupReplyQuickEmojis()
+
+        btnEmojiPicker.setOnClickListener {
+            showEmojiPickerDialog()
+        }
+
         // Initialize username fields
         etMainUserName.setText(prefs.userName)
         btnEditUserName.text = "👤 ${prefs.userName}"
@@ -371,11 +396,141 @@ class MainActivity : AppCompatActivity(), RelayListener {
 
     private fun setupRecyclerView() {
         adapter = MessageAdapter(this)
+        adapter.onReplyListener = { target ->
+            setReplyTarget(target)
+        }
+        adapter.onReactionListener = { target, emoji ->
+            val room = client.currentRoomId
+            if (!room.isNullOrEmpty()) {
+                client.sendReaction(room, target.id, emoji, prefs.peerId, prefs.userName)
+                val current = target.reactions[emoji]?.toMutableList() ?: mutableListOf()
+                if (current.contains(prefs.userName)) {
+                    current.remove(prefs.userName)
+                } else {
+                    current.add(prefs.userName)
+                }
+                val newReactions = target.reactions.toMutableMap()
+                if (current.isEmpty()) {
+                    newReactions.remove(emoji)
+                } else {
+                    newReactions[emoji] = current
+                }
+                adapter.updateReactions(target.id, newReactions)
+                triggerHaptic()
+            } else {
+                Toast.makeText(this, "Join a room first", Toast.LENGTH_SHORT).show()
+            }
+        }
         val layoutManager = LinearLayoutManager(this).apply {
             stackFromEnd = true
         }
         rvMessages.layoutManager = layoutManager
         rvMessages.adapter = adapter
+    }
+
+    fun getCurrentUserName(): String = prefs.userName
+
+    fun scrollToMessage(position: Int) {
+        if (position in 0 until adapter.itemCount) {
+            rvMessages.smoothScrollToPosition(position)
+        }
+    }
+
+    fun setReplyTarget(target: ChatMessage) {
+        val preview = when {
+            target.type == "voice" || target.media?.type == "voice" -> "🎤 Voice Note"
+            target.type == "image" || target.media?.type == "image" -> "📷 Photo attachment"
+            target.type == "link" || target.url != null -> target.title ?: target.url ?: "🔗 Link"
+            else -> target.text
+        }
+        val sender = if (target.isOutgoing) "You" else (if (target.senderName.isNotBlank()) target.senderName else "Friend")
+        currentReplyTarget = tn.myapps.zenbrave.model.ReplyPayload(
+            id = target.id,
+            senderName = sender,
+            text = preview.take(100),
+            type = target.type
+        )
+        tvReplyUser.text = "Replying to $sender"
+        tvReplySnippet.text = preview
+        layoutReplyPreview.visibility = View.VISIBLE
+        etMessage.requestFocus()
+    }
+
+    fun clearReplyTarget() {
+        currentReplyTarget = null
+        layoutReplyPreview.visibility = View.GONE
+    }
+
+    private fun setupReplyQuickEmojis() {
+        val quickEmojis = listOf("👍", "❤️", "😂", "🔥", "🎉", "👏", "😮", "😢")
+        layoutReplyQuickEmojis.removeAllViews()
+        for (emoji in quickEmojis) {
+            val btn = TextView(this).apply {
+                text = emoji
+                textSize = 18f
+                setPadding(20, 10, 20, 10)
+                background = ContextCompat.getDrawable(this@MainActivity, R.drawable.bg_btn_secondary)
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 0, 12, 0)
+                }
+                layoutParams = params
+                setOnClickListener {
+                    sendQuickEmojiReply(emoji)
+                }
+            }
+            layoutReplyQuickEmojis.addView(btn)
+        }
+    }
+
+    private fun sendQuickEmojiReply(emoji: String) {
+        val activeRoom = client.currentRoomId
+        if (activeRoom.isNullOrEmpty()) {
+            Toast.makeText(this, "Please join a room first", Toast.LENGTH_SHORT).show()
+            panelConnect.visibility = View.VISIBLE
+            return
+        }
+
+        val message = ChatMessage(
+            id = "msg-${System.currentTimeMillis()}-${(1000..9999).random()}",
+            type = "text",
+            text = emoji,
+            senderId = prefs.peerId,
+            senderName = prefs.userName,
+            browser = "Android",
+            timestamp = System.currentTimeMillis(),
+            isOutgoing = true,
+            replyTo = currentReplyTarget
+        )
+
+        client.sendRelayMessage(activeRoom, message) {
+            adapter.addMessage(message)
+            rvMessages.scrollToPosition(adapter.itemCount - 1)
+            layoutEmptyState.visibility = View.GONE
+            clearReplyTarget()
+            triggerHaptic()
+        }
+    }
+
+    private fun showEmojiPickerDialog() {
+        val emojis = arrayOf(
+            "😀", "😂", "🤣", "😊", "😍", "🥰", "😘", "😜", "😎", "🥳",
+            "🤩", "🤔", "🤫", "😴", "😭", "😱", "🤯", "👍", "👎", "👏",
+            "🙌", "🤝", "✌️", "❤️", "🔥", "✨", "🚀", "🎉", "💯", "☕"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Insert Emoji")
+            .setItems(emojis) { _, which ->
+                val chosen = emojis[which]
+                val start = etMessage.selectionStart.coerceAtLeast(0)
+                val end = etMessage.selectionEnd.coerceAtLeast(0)
+                etMessage.text.replace(start, end, chosen)
+                etMessage.requestFocus()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun setupRecentChips() {
@@ -515,7 +670,8 @@ class MainActivity : AppCompatActivity(), RelayListener {
             senderName = prefs.userName,
             browser = "Android",
             timestamp = System.currentTimeMillis(),
-            isOutgoing = true
+            isOutgoing = true,
+            replyTo = currentReplyTarget
         )
 
         client.sendRelayMessage(activeRoom, message) {
@@ -523,6 +679,7 @@ class MainActivity : AppCompatActivity(), RelayListener {
             rvMessages.scrollToPosition(adapter.itemCount - 1)
             layoutEmptyState.visibility = View.GONE
             etMessage.text.clear()
+            clearReplyTarget()
             triggerHaptic()
         }
     }
@@ -805,6 +962,11 @@ class MainActivity : AppCompatActivity(), RelayListener {
                 NotificationHelper.showMessageNotification(this, message, targetRoom)
             }
         }
+    }
+
+    override fun onReactionReceived(targetMessageId: String, reactions: Map<String, List<String>>, emoji: String, senderName: String) {
+        adapter.updateReactions(targetMessageId, reactions)
+        triggerHaptic()
     }
 
     override fun onError(error: String) {

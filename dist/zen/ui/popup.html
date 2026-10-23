@@ -110,6 +110,70 @@
           </div>
         </div>
 
+        <!-- Reply Preview Bar (Hidden by default) -->
+        <div id="reply-preview-bar" class="reply-preview-bar hidden">
+          <div class="reply-preview-bar-inner">
+            <div class="reply-accent-bar"></div>
+            <div class="reply-preview-info">
+              <div class="reply-preview-header">
+                <span class="reply-preview-label">Replying to <strong id="reply-preview-user">Friend</strong></span>
+                <button type="button" id="cancel-reply-btn" class="btn-cancel-reply" title="Cancel reply">&times;</button>
+              </div>
+              <div id="reply-preview-text" class="reply-preview-text">Snippet...</div>
+              <div class="reply-quick-emojis" title="Reply instantly with emoji">
+                <button type="button" class="quick-emoji-reply-btn" data-emoji="👍">👍</button>
+                <button type="button" class="quick-emoji-reply-btn" data-emoji="❤️">❤️</button>
+                <button type="button" class="quick-emoji-reply-btn" data-emoji="😂">😂</button>
+                <button type="button" class="quick-emoji-reply-btn" data-emoji="🔥">🔥</button>
+                <button type="button" class="quick-emoji-reply-btn" data-emoji="🎉">🎉</button>
+                <button type="button" class="quick-emoji-reply-btn" data-emoji="👏">👏</button>
+                <button type="button" class="quick-emoji-reply-btn" data-emoji="😮">😮</button>
+                <button type="button" class="quick-emoji-reply-btn" data-emoji="😢">😢</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Emoji Palette Popover (Hidden by default) -->
+        <div id="emoji-palette-popover" class="emoji-palette-popover hidden">
+          <div class="emoji-palette-header">
+            <span>Pick Emoji</span>
+            <button type="button" id="close-emoji-palette-btn" class="btn-cancel-reply">&times;</button>
+          </div>
+          <div class="emoji-palette-grid">
+            <button type="button" class="emoji-btn">😀</button>
+            <button type="button" class="emoji-btn">😂</button>
+            <button type="button" class="emoji-btn">🤣</button>
+            <button type="button" class="emoji-btn">😊</button>
+            <button type="button" class="emoji-btn">😍</button>
+            <button type="button" class="emoji-btn">🥰</button>
+            <button type="button" class="emoji-btn">😘</button>
+            <button type="button" class="emoji-btn">😜</button>
+            <button type="button" class="emoji-btn">😎</button>
+            <button type="button" class="emoji-btn">🥳</button>
+            <button type="button" class="emoji-btn">🤩</button>
+            <button type="button" class="emoji-btn">🤔</button>
+            <button type="button" class="emoji-btn">🤫</button>
+            <button type="button" class="emoji-btn">😴</button>
+            <button type="button" class="emoji-btn">😭</button>
+            <button type="button" class="emoji-btn">😱</button>
+            <button type="button" class="emoji-btn">🤯</button>
+            <button type="button" class="emoji-btn">👍</button>
+            <button type="button" class="emoji-btn">👎</button>
+            <button type="button" class="emoji-btn">👏</button>
+            <button type="button" class="emoji-btn">🙌</button>
+            <button type="button" class="emoji-btn">🤝</button>
+            <button type="button" class="emoji-btn">✌️</button>
+            <button type="button" class="emoji-btn">❤️</button>
+            <button type="button" class="emoji-btn">🔥</button>
+            <button type="button" class="emoji-btn">✨</button>
+            <button type="button" class="emoji-btn">🚀</button>
+            <button type="button" class="emoji-btn">🎉</button>
+            <button type="button" class="emoji-btn">💯</button>
+            <button type="button" class="emoji-btn">☕</button>
+          </div>
+        </div>
+
         <!-- Message Input Footer -->
         <footer class="chat-footer">
           <input type="file" id="file-picker-input" style="display: none;" />
@@ -125,6 +189,9 @@
               <line x1="12" y1="19" x2="12" y2="23"></line>
               <line x1="8" y1="23" x2="16" y2="23"></line>
             </svg>
+          </button>
+          <button type="button" id="emoji-picker-btn" class="btn-action-icon btn-emoji-trigger" title="Insert emoji">
+            <span>😀</span>
           </button>
           <textarea id="chat-input" placeholder="Type a message or paste a link..." rows="1"></textarea>
           <button id="send-btn" class="btn-send" title="Send message (Enter)">

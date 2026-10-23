@@ -31,6 +31,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cancelVoiceBtn = document.getElementById('cancel-voice-btn');
   const sendVoiceBtn = document.getElementById('send-voice-btn');
 
+  // Reply & Emoji Picker Elements
+  const replyPreviewBar = document.getElementById('reply-preview-bar');
+  const replyPreviewUser = document.getElementById('reply-preview-user');
+  const replyPreviewText = document.getElementById('reply-preview-text');
+  const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+  const quickEmojiReplyBtns = document.querySelectorAll('.quick-emoji-reply-btn');
+  const emojiPickerBtn = document.getElementById('emoji-picker-btn');
+  const emojiPalettePopover = document.getElementById('emoji-palette-popover');
+  const closeEmojiPaletteBtn = document.getElementById('close-emoji-palette-btn');
+  const emojiPaletteBtns = document.querySelectorAll('.emoji-btn');
+
   // Links Hub Pane
   const linksSearchInput = document.getElementById('links-search-input');
   const clearAllLinksBtn = document.getElementById('clear-all-links-btn');
@@ -149,6 +160,104 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentAudio = null;
   const renderedMessageIds = new Set();
   let activeRoomMessages = [];
+  let currentReplyTarget = null;
+
+  function setReplyTarget(msg) {
+    if (!msg) return;
+    const isMe = msg.senderId === (connection ? connection.peerId : '');
+    const senderName = isMe ? 'You' : (msg.senderName || 'Friend');
+    let snippet = '';
+    if (msg.type === 'link' || msg.link) {
+      snippet = (msg.link && msg.link.title) || msg.url || 'Shared a link';
+    } else if (msg.type === 'voice' || (msg.media && msg.media.type === 'voice')) {
+      snippet = '🎤 Voice note';
+    } else if (msg.type === 'image' || (msg.media && msg.media.type === 'image')) {
+      snippet = '📷 Photo attachment';
+    } else {
+      snippet = msg.text || '';
+    }
+
+    currentReplyTarget = {
+      id: msg.id,
+      senderName: senderName,
+      text: snippet.substring(0, 100),
+      type: msg.type || 'text'
+    };
+
+    if (replyPreviewUser) replyPreviewUser.textContent = senderName;
+    if (replyPreviewText) replyPreviewText.textContent = snippet;
+    if (replyPreviewBar) replyPreviewBar.classList.remove('hidden');
+    if (chatInput) chatInput.focus();
+  }
+
+  function clearReplyTarget() {
+    currentReplyTarget = null;
+    if (replyPreviewBar) replyPreviewBar.classList.add('hidden');
+  }
+
+  if (cancelReplyBtn) {
+    cancelReplyBtn.onclick = clearReplyTarget;
+  }
+
+  function renderReactionPills(container, msgId, reactions) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!reactions || typeof reactions !== 'object') return;
+
+    for (const [emoji, senders] of Object.entries(reactions)) {
+      if (!Array.isArray(senders) || senders.length === 0) continue;
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      const myId = connection ? connection.peerId : '';
+      const myName = settings ? settings.userName : '';
+      const isMine = senders.includes(myName) || senders.includes(myId);
+      pill.className = `reaction-pill ${isMine ? 'active' : ''}`;
+      pill.innerHTML = `<span>${escapeHtml(emoji)}</span> <span class="reaction-count">${senders.length}</span>`;
+      pill.title = senders.join(', ');
+      pill.onclick = (e) => {
+        e.stopPropagation();
+        if (connection && connection.roomId) {
+          connection.sendReaction(msgId, emoji);
+          toggleLocalReaction(msgId, emoji);
+        } else {
+          showToast('Join a room first');
+        }
+      };
+      container.appendChild(pill);
+    }
+  }
+
+  function toggleLocalReaction(msgId, emoji) {
+    const user = settings.userName || 'You';
+    const targetMsg = activeRoomMessages.find(m => m.id === msgId);
+    if (targetMsg) {
+      targetMsg.reactions = targetMsg.reactions || {};
+      targetMsg.reactions[emoji] = targetMsg.reactions[emoji] || [];
+      const idx = targetMsg.reactions[emoji].indexOf(user);
+      if (idx >= 0) {
+        targetMsg.reactions[emoji].splice(idx, 1);
+        if (targetMsg.reactions[emoji].length === 0) {
+          delete targetMsg.reactions[emoji];
+        }
+      } else {
+        targetMsg.reactions[emoji].push(user);
+      }
+      if (connection && connection.roomId) {
+        AppStorage.cacheMessages(connection.roomId, activeRoomMessages);
+      }
+      const box = document.getElementById(`reactions-${msgId}`);
+      if (box) renderReactionPills(box, msgId, targetMsg.reactions);
+    }
+  }
+
+  function insertTextAtCursor(input, textToInsert) {
+    if (!input) return;
+    const start = input.selectionStart || 0;
+    const end = input.selectionEnd || 0;
+    const val = input.value;
+    input.value = val.substring(0, start) + textToInsert + val.substring(end);
+    input.selectionStart = input.selectionEnd = start + textToInsert.length;
+  }
 
   function escapeHtml(str) {
     if (typeof str !== 'string') return String(str || '');
@@ -375,6 +484,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
+    connection.on('reaction', ({ targetMessageId, reactions }) => {
+      const targetMsg = activeRoomMessages.find(m => m.id === targetMessageId);
+      if (targetMsg) {
+        targetMsg.reactions = reactions;
+        if (connection.roomId) {
+          AppStorage.cacheMessages(connection.roomId, activeRoomMessages);
+        }
+      }
+      const box = document.getElementById(`reactions-${targetMessageId}`);
+      if (box) {
+        renderReactionPills(box, targetMessageId, reactions);
+      }
+    });
+
     // Auto-connect to server and reconnect to last room if present
     connection.connectServer().then(() => {
       if (settings.lastRoomId) {
@@ -445,6 +568,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     meta.innerHTML = `<span class="sender-name ${isMe ? 'me' : 'peer'}">${sender}</span>${browserTag} • <span class="message-time">${escapeHtml(timeStr)}</span>`;
     row.appendChild(meta);
 
+    // Render Quoted Reply if message is replying to another message
+    if (msg.replyTo) {
+      const quoteCard = document.createElement('div');
+      quoteCard.className = 'quoted-reply-card';
+      quoteCard.title = 'Click to jump to quoted message';
+      quoteCard.innerHTML = `
+        <div class="quoted-bar"></div>
+        <div class="quoted-body">
+          <span class="quoted-sender">${escapeHtml(msg.replyTo.senderName || 'Friend')}</span>
+          <span class="quoted-text">${escapeHtml(msg.replyTo.text || '')}</span>
+        </div>
+      `;
+      quoteCard.onclick = (e) => {
+        e.stopPropagation();
+        const targetEl = document.getElementById(`msg-${msg.replyTo.id}`);
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetEl.classList.remove('highlight-flash');
+          void targetEl.offsetWidth; // Force CSS animation restart
+          targetEl.classList.add('highlight-flash');
+        } else {
+          showToast('Quoted message is not in current view');
+        }
+      };
+      row.appendChild(quoteCard);
+    }
+
     if (msg.type === 'link' || msg.link) {
       const linkData = msg.link || msg;
       const card = createLinkCardElement(linkData);
@@ -498,6 +648,53 @@ document.addEventListener('DOMContentLoaded', async () => {
       bubble.innerHTML = formatTextWithLinks(msg.text || '');
       row.appendChild(bubble);
     }
+
+    // Message Actions Toolbar (Reply & Quick Reactions)
+    const actionsBar = document.createElement('div');
+    actionsBar.className = 'message-actions-bar';
+
+    const quickReactionEmojis = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
+    for (const em of quickReactionEmojis) {
+      const emBtn = document.createElement('button');
+      emBtn.type = 'button';
+      emBtn.className = 'message-action-btn';
+      emBtn.textContent = em;
+      emBtn.title = `React with ${em}`;
+      emBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (connection && connection.roomId) {
+          connection.sendReaction(msgId, em);
+          toggleLocalReaction(msgId, em);
+        } else {
+          showToast('Join a room first');
+        }
+      };
+      actionsBar.appendChild(emBtn);
+    }
+
+    const replyActionBtn = document.createElement('button');
+    replyActionBtn.type = 'button';
+    replyActionBtn.className = 'message-action-btn btn-reply-action';
+    replyActionBtn.title = 'Reply to this message';
+    replyActionBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="9 17 4 12 9 7"></polyline>
+        <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
+      </svg>
+    `;
+    replyActionBtn.onclick = (e) => {
+      e.stopPropagation();
+      setReplyTarget(msg);
+    };
+    actionsBar.appendChild(replyActionBtn);
+    row.appendChild(actionsBar);
+
+    // Message Reactions container
+    const reactionsBox = document.createElement('div');
+    reactionsBox.id = `reactions-${msgId}`;
+    reactionsBox.className = 'reactions-container';
+    renderReactionPills(reactionsBox, msgId, msg.reactions);
+    row.appendChild(reactionsBox);
 
     chatMessages.appendChild(row);
   }
@@ -887,6 +1084,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const replyPayload = currentReplyTarget ? { ...currentReplyTarget } : null;
+
     // Check if message is a bare URL
     if (/^https?:\/\/[^\s]+$/.test(text)) {
       try {
@@ -900,7 +1099,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           senderId: connection.peerId,
           senderName: settings.userName,
           browser: BrowserAPI.detectBrowserName(),
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          replyTo: replyPayload
         };
         connection.sendMessage(card);
         renderMessage(card, true);
@@ -908,8 +1108,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         AppStorage.saveLink(card);
         renderSavedLinks(savedLinks);
       } catch (e) {
-        connection.sendMessage({ type: 'text', text });
-        renderMessage({ type: 'text', text, senderId: connection.peerId, timestamp: Date.now() }, true);
+        connection.sendMessage({ type: 'text', text, replyTo: replyPayload });
+        renderMessage({ type: 'text', text, senderId: connection.peerId, timestamp: Date.now(), replyTo: replyPayload }, true);
       }
     } else {
       const msg = {
@@ -918,12 +1118,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         senderId: connection.peerId,
         senderName: settings.userName,
         browser: BrowserAPI.detectBrowserName(),
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        replyTo: replyPayload
       };
       connection.sendMessage(msg);
       renderMessage(msg, true);
     }
 
+    clearReplyTarget();
     playTone(true);
     chatInput.value = '';
     chatInput.style.height = 'auto';
@@ -931,6 +1133,75 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   sendBtn.onclick = handleSendMessage;
+
+  // Quick emoji reply bar buttons
+  if (quickEmojiReplyBtns) {
+    quickEmojiReplyBtns.forEach(btn => {
+      btn.onclick = () => {
+        const emoji = btn.getAttribute('data-emoji');
+        if (!emoji) return;
+
+        if (!connection.roomId) {
+          showToast('Join or create a room first!');
+          switchTab('tab-connect');
+          return;
+        }
+
+        const msg = {
+          type: 'text',
+          text: emoji,
+          replyTo: currentReplyTarget ? { ...currentReplyTarget } : null,
+          senderId: connection.peerId,
+          senderName: settings.userName,
+          browser: BrowserAPI.detectBrowserName(),
+          timestamp: Date.now()
+        };
+
+        connection.sendMessage(msg);
+        renderMessage(msg, true);
+        if (connection.roomId) {
+          activeRoomMessages.push(msg);
+          AppStorage.cacheMessages(connection.roomId, activeRoomMessages);
+        }
+        playTone(true);
+        clearReplyTarget();
+        scrollChatToBottom();
+      };
+    });
+  }
+
+  // Emoji picker popover controls
+  if (emojiPickerBtn && emojiPalettePopover) {
+    emojiPickerBtn.onclick = (e) => {
+      e.stopPropagation();
+      emojiPalettePopover.classList.toggle('hidden');
+    };
+  }
+
+  if (closeEmojiPaletteBtn && emojiPalettePopover) {
+    closeEmojiPaletteBtn.onclick = () => {
+      emojiPalettePopover.classList.add('hidden');
+    };
+  }
+
+  document.addEventListener('click', (e) => {
+    if (emojiPalettePopover && !emojiPalettePopover.classList.contains('hidden')) {
+      if (!emojiPalettePopover.contains(e.target) && e.target !== emojiPickerBtn && !emojiPickerBtn.contains(e.target)) {
+        emojiPalettePopover.classList.add('hidden');
+      }
+    }
+  });
+
+  if (emojiPaletteBtns) {
+    emojiPaletteBtns.forEach(btn => {
+      btn.onclick = () => {
+        const emojiChar = btn.textContent.trim();
+        insertTextAtCursor(chatInput, emojiChar);
+        if (emojiPalettePopover) emojiPalettePopover.classList.add('hidden');
+        chatInput.focus();
+      };
+    });
+  }
 
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
