@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Zen & Brave Link & Chat",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Cross-browser link sharing, text chat, voice notes, and media transfer between Zen Browser and Brave.",
   "icons": {
     "16": "ui/icons/icon-16.png",

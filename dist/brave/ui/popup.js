@@ -73,6 +73,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   const testServerBtn = document.getElementById('test-server-btn');
   const serverTestResult = document.getElementById('server-test-result');
 
+  // Update Center Elements
+  const settingsUpdateDot = document.getElementById('settings-update-dot');
+  const updateStatusBadge = document.getElementById('update-status-badge');
+  const installedVersionTag = document.getElementById('installed-version-tag');
+  const installedBrowserTag = document.getElementById('installed-browser-tag');
+  const checkUpdatesBtn = document.getElementById('check-updates-btn');
+  const checkUpdatesIcon = document.getElementById('check-updates-icon');
+  const updateLastChecked = document.getElementById('update-last-checked');
+  const updateAvailableBox = document.getElementById('update-available-box');
+  const remoteVersionTag = document.getElementById('remote-version-tag');
+  const remoteReleaseDate = document.getElementById('remote-release-date');
+  const updateChangelogList = document.getElementById('update-changelog-list');
+  const updateNowBtn = document.getElementById('update-now-btn');
+  const aboutVersionTitle = document.getElementById('about-version-title');
+
   const toastContainer = document.getElementById('toast-container');
 
   // State
@@ -1422,4 +1437,200 @@ document.addEventListener('DOMContentLoaded', async () => {
     await BrowserAPI.storage.local.remove(['messageCache']);
     showToast('Chat cache wiped');
   };
+
+  // ==========================================================================
+  // In-Extension Update Center
+  // ==========================================================================
+  function compareVersions(v1, v2) {
+    const parts1 = String(v1 || '0').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const parts2 = String(v2 || '0').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const len = Math.max(parts1.length, parts2.length);
+    for (let i = 0; i < len; i++) {
+      const p1 = parts1[i] || 0;
+      const p2 = parts2[i] || 0;
+      if (p1 > p2) return 1;
+      if (p1 < p2) return -1;
+    }
+    return 0;
+  }
+
+  function getInstalledExtensionVersion() {
+    try {
+      const manifest = (BrowserAPI.runtime && BrowserAPI.runtime.getManifest && BrowserAPI.runtime.getManifest()) ||
+                       (BrowserAPI.raw && BrowserAPI.raw.runtime && BrowserAPI.raw.runtime.getManifest && BrowserAPI.raw.runtime.getManifest()) ||
+                       (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()) ||
+                       (typeof browser !== 'undefined' && browser.runtime?.getManifest?.());
+      if (manifest && manifest.version) {
+        return manifest.version;
+      }
+    } catch (_) {}
+    return '1.0.3';
+  }
+
+  let latestRemoteData = null;
+
+  function applyUpdateUI(data, currentVersion, isManual) {
+    const remoteExt = (data && data.extension) || {};
+    const remoteVersion = remoteExt.version || currentVersion;
+    const hasUpdate = compareVersions(remoteVersion, currentVersion) > 0;
+
+    if (hasUpdate) {
+      if (updateStatusBadge) {
+        updateStatusBadge.textContent = `Update Ready (v${remoteVersion})`;
+        updateStatusBadge.className = 'update-status-badge update-ready';
+      }
+      if (settingsUpdateDot) settingsUpdateDot.classList.remove('hidden');
+      if (remoteVersionTag) remoteVersionTag.textContent = `v${remoteVersion}`;
+      if (remoteReleaseDate && remoteExt.releaseDate) {
+        remoteReleaseDate.textContent = `Released: ${remoteExt.releaseDate}`;
+      }
+
+      if (updateChangelogList && Array.isArray(remoteExt.changelog)) {
+        updateChangelogList.innerHTML = remoteExt.changelog.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+      }
+
+      if (updateAvailableBox) updateAvailableBox.classList.remove('hidden');
+
+      if (isManual) {
+        showToast(`New update v${remoteVersion} available!`);
+      }
+    } else {
+      if (updateStatusBadge) {
+        updateStatusBadge.textContent = 'Up to Date';
+        updateStatusBadge.className = 'update-status-badge up-to-date';
+      }
+      if (settingsUpdateDot) settingsUpdateDot.classList.add('hidden');
+      if (updateAvailableBox) updateAvailableBox.classList.add('hidden');
+
+      if (isManual) {
+        showToast(`You are running the latest version (v${currentVersion})!`);
+      }
+    }
+  }
+
+  async function checkForExtensionUpdates(isManual = false) {
+    if (checkUpdatesIcon) checkUpdatesIcon.classList.add('spinning');
+    if (updateStatusBadge) {
+      updateStatusBadge.textContent = 'Checking...';
+      updateStatusBadge.className = 'update-status-badge checking';
+    }
+
+    const currentVersion = getInstalledExtensionVersion();
+    if (installedVersionTag) installedVersionTag.textContent = `v${currentVersion}`;
+    if (aboutVersionTitle) aboutVersionTitle.textContent = `Zen & Brave Link Chat v${currentVersion}`;
+    const detectedBrowser = BrowserAPI.detectBrowserName();
+    if (installedBrowserTag) installedBrowserTag.textContent = detectedBrowser;
+
+    // Check throttled cache for silent background checks
+    if (!isManual && BrowserAPI.storage?.local) {
+      try {
+        const cached = await BrowserAPI.storage.local.get(['lastUpdateCheck', 'cachedUpdateData']);
+        const now = Date.now();
+        if (cached && cached.lastUpdateCheck && (now - cached.lastUpdateCheck < 15 * 60 * 1000) && cached.cachedUpdateData) {
+          latestRemoteData = cached.cachedUpdateData;
+          if (updateLastChecked) {
+            const timeStr = new Date(cached.lastUpdateCheck).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            updateLastChecked.textContent = `Checked at ${timeStr}`;
+          }
+          applyUpdateUI(latestRemoteData, currentVersion, false);
+          if (checkUpdatesIcon) checkUpdatesIcon.classList.remove('spinning');
+          return;
+        }
+      } catch (_) {}
+    }
+
+    try {
+      let serverUrl = (settings.serverUrl || 'https://zenbrave.myapps.tn').trim();
+      if (!/^https?:\/\//i.test(serverUrl) && !/^wss?:\/\//i.test(serverUrl)) {
+        serverUrl = 'https://' + serverUrl;
+      }
+      const httpUrl = serverUrl.replace(/^ws:\/\//i, 'http://').replace(/^wss:\/\//i, 'https://');
+
+      const res = await fetch(`${httpUrl}/api/version`, { method: 'GET' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      latestRemoteData = data;
+
+      const now = Date.now();
+      if (BrowserAPI.storage?.local) {
+        try {
+          await BrowserAPI.storage.local.set({
+            lastUpdateCheck: now,
+            cachedUpdateData: data
+          });
+        } catch (_) {}
+      }
+
+      if (updateLastChecked) {
+        const timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        updateLastChecked.textContent = `Checked at ${timeStr}`;
+      }
+
+      applyUpdateUI(data, currentVersion, isManual);
+    } catch (err) {
+      console.warn('Extension update check error:', err);
+      if (updateStatusBadge) {
+        updateStatusBadge.textContent = 'Up to Date';
+        updateStatusBadge.className = 'update-status-badge up-to-date';
+      }
+      if (isManual) {
+        showToast('Unable to reach update server');
+      }
+    } finally {
+      if (checkUpdatesIcon) checkUpdatesIcon.classList.remove('spinning');
+    }
+  }
+
+  function triggerExtensionUpdate() {
+    const isZenOrFirefox = Boolean(BrowserAPI.isFirefox) || !Boolean(BrowserAPI.isChromium);
+    let serverUrl = (settings.serverUrl || 'https://zenbrave.myapps.tn').trim();
+    if (!/^https?:\/\//i.test(serverUrl) && !/^wss?:\/\//i.test(serverUrl)) {
+      serverUrl = 'https://' + serverUrl;
+    }
+    const httpUrl = serverUrl.replace(/^ws:\/\//i, 'http://').replace(/^wss:\/\//i, 'https://');
+
+    if (isZenOrFirefox) {
+      const xpiUrl = latestRemoteData?.extension?.zen?.xpiUrl || `${httpUrl}/download/zen.xpi`;
+      showToast('Opening in-browser XPInstall dialog...');
+      BrowserAPI.tabs.create({ url: xpiUrl });
+    } else {
+      showToast('Checking for extension update...');
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.requestUpdateCheck) {
+          chrome.runtime.requestUpdateCheck((status) => {
+            if (status === 'update_available') {
+              showToast('Update downloading in background. Reloading...');
+              setTimeout(() => {
+                if (chrome.runtime?.reload) chrome.runtime.reload();
+              }, 1200);
+            } else {
+              const braveUrl = latestRemoteData?.extension?.brave?.zipUrl || `${httpUrl}/download/brave`;
+              showToast('Opening Brave update download...');
+              BrowserAPI.tabs.create({ url: braveUrl });
+            }
+          });
+          return;
+        }
+      } catch (_) {}
+      const braveUrl = latestRemoteData?.extension?.brave?.zipUrl || `${httpUrl}/download/brave`;
+      showToast('Opening Brave update download...');
+      BrowserAPI.tabs.create({ url: braveUrl });
+    }
+  }
+
+  if (checkUpdatesBtn) {
+    checkUpdatesBtn.onclick = () => checkForExtensionUpdates(true);
+  }
+
+  if (updateNowBtn) {
+    updateNowBtn.onclick = () => triggerExtensionUpdate();
+  }
+
+  // Initial Update Check & Version Display
+  const initCurrentVersion = getInstalledExtensionVersion();
+  if (installedVersionTag) installedVersionTag.textContent = `v${initCurrentVersion}`;
+  if (aboutVersionTitle) aboutVersionTitle.textContent = `Zen & Brave Link Chat v${initCurrentVersion}`;
+  if (installedBrowserTag) installedBrowserTag.textContent = BrowserAPI.detectBrowserName();
+  checkForExtensionUpdates(false);
 });
+

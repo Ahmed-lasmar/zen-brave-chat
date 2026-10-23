@@ -1,6 +1,6 @@
 {
   "name": "zen-brave-link-chat",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Cross-browser Link & Media Chat extension for Zen Browser and Brave",
   "main": "server/index.js",
   "scripts": {

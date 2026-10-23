@@ -247,6 +247,25 @@
           return rawApi.runtime.getURL(path);
         }
         return path;
+      },
+      getManifest() {
+        if (rawApi && rawApi.runtime && rawApi.runtime.getManifest) {
+          return rawApi.runtime.getManifest();
+        }
+        return null;
+      },
+      reload() {
+        if (rawApi && rawApi.runtime && rawApi.runtime.reload) {
+          rawApi.runtime.reload();
+        }
+      },
+      requestUpdateCheck(callback) {
+        if (rawApi && rawApi.runtime && rawApi.runtime.requestUpdateCheck) {
+          return rawApi.runtime.requestUpdateCheck(callback);
+        }
+        if (typeof callback === 'function') {
+          callback('no_update');
+        }
       }
     }
   };

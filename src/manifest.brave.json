@@ -1,4 +1,5 @@
 {
+  "update_url": "https://zenbrave.myapps.tn/updates/brave/updates.xml",
   "action": {
     "default_title": "Zen & Brave Link & Chat",
     "default_popup": "ui/popup.html",

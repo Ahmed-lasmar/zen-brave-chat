@@ -1,6 +1,7 @@
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { createServer } = require('../server/index');
 const { connectWebSocket, OPCODES } = require('../server/websocket');
 const { RoomManager } = require('../server/rooms');
@@ -33,6 +34,22 @@ async function runTests() {
   const app = createServer({ storagePath: testStoragePath });
   const addr = await app.listen(0, '127.0.0.1');
   const wsUrl = `ws://127.0.0.1:${addr.port}`;
+
+  function httpGet(urlPath, headers = {}) {
+    return new Promise((resolve, reject) => {
+      http.get(`http://127.0.0.1:${addr.port}${urlPath}`, { headers }, (res) => {
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode,
+            headers: res.headers,
+            body: Buffer.concat(chunks)
+          });
+        });
+      }).on('error', reject);
+    });
+  }
 
   try {
     // 1. WebSocket RFC 6455 Handshake & Ping/Pong
@@ -405,6 +422,99 @@ async function runTests() {
 
       clientA.close();
       clientB.close();
+    });
+
+    // 12. Mozilla Gecko WebExtension Updates Manifest
+    await test('GET /updates/zen/updates.json returns valid Gecko update manifest', async () => {
+      const res = await httpGet('/updates/zen/updates.json');
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.headers['content-type'], 'application/json');
+      const data = JSON.parse(res.body.toString('utf8'));
+      assert.ok(data.addons, 'Response must contain addons');
+      assert.ok(data.addons['zen-brave-chat@antigravity'], 'Must contain zen-brave-chat@antigravity entry');
+      const updates = data.addons['zen-brave-chat@antigravity'].updates;
+      assert.ok(Array.isArray(updates) && updates.length > 0, 'Must have updates list');
+      assert.strictEqual(updates[0].version, '1.0.3');
+      assert.ok(updates[0].update_link.includes('/download/zen.xpi'));
+      assert.ok(updates[0].update_hash.startsWith('sha256:'));
+      assert.strictEqual(updates[0].applications.gecko.strict_min_version, '109.0');
+    });
+
+    // 13. Direct Zen / Firefox XPInstall download (.xpi)
+    await test('GET /download/zen.xpi returns HTTP 200 with application/x-xpinstall and inline disposition', async () => {
+      const res = await httpGet('/download/zen.xpi');
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.headers['content-type'], 'application/x-xpinstall');
+      assert.ok(res.headers['content-disposition'].includes('inline'));
+      assert.ok(res.headers['content-disposition'].includes('zen-brave-chat.xpi'));
+      const xpiPath = path.join(__dirname, '../dist/zen.xpi');
+      if (fs.existsSync(xpiPath)) {
+        assert.strictEqual(res.body.length, fs.statSync(xpiPath).size);
+      }
+    });
+
+    // 14. Chromium Omaha Updates XML (Brave / Chrome)
+    await test('GET /updates/brave/updates.xml returns Omaha update XML matching requested appid', async () => {
+      const res = await httpGet('/updates/brave/updates.xml?x=id%3Dcustom-brave-app%26v%3D1.0.0');
+      assert.strictEqual(res.statusCode, 200);
+      assert.ok(res.headers['content-type'].includes('application/xml'));
+      const xml = res.body.toString('utf8');
+      assert.ok(xml.includes("<app appid='custom-brave-app'>"));
+      assert.ok(xml.includes("<updatecheck codebase="));
+      assert.ok(xml.includes("/download/brave.crx"));
+      assert.ok(xml.includes("version='1.0.3'"));
+    });
+
+    // 15. Brave / Chromium CRX package download
+    await test('GET /download/brave.crx returns HTTP 200 with application/x-chrome-extension', async () => {
+      const res = await httpGet('/download/brave.crx');
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.headers['content-type'], 'application/x-chrome-extension');
+      assert.ok(res.headers['content-disposition'].includes('zen-brave-chat.crx'));
+      const crxPath = path.join(__dirname, '../dist/brave.crx');
+      if (fs.existsSync(crxPath)) {
+        assert.strictEqual(res.body.length, fs.statSync(crxPath).size);
+      }
+    });
+
+    // 16. Extension Metadata in /api/version
+    await test('GET /api/version returns extension update metadata alongside android and server', async () => {
+      const res = await httpGet('/api/version');
+      assert.strictEqual(res.statusCode, 200);
+      const data = JSON.parse(res.body.toString('utf8'));
+      assert.ok(data.extension, 'Must contain extension section');
+      assert.strictEqual(data.extension.version, '1.0.3');
+      assert.ok(Array.isArray(data.extension.changelog) && data.extension.changelog.length > 0);
+      assert.ok(data.extension.zen.xpiUrl.includes('/download/zen.xpi'));
+      assert.ok(data.extension.zen.updateManifestUrl.includes('/updates/zen/updates.json'));
+      assert.ok(data.extension.zen.sha256.length > 0);
+      assert.ok(data.extension.brave.crxUrl.includes('/download/brave.crx'));
+      assert.ok(data.extension.brave.updateManifestUrl.includes('/updates/brave/updates.xml'));
+    });
+
+    // 17. Download aliases (/download/xpi and /download/crx) and HEAD requests
+    await test('Download alias endpoints (/download/xpi, /download/crx) and Omaha multiple-app queries', async () => {
+      // /download/xpi alias
+      const xpiRes = await httpGet('/download/xpi');
+      assert.strictEqual(xpiRes.statusCode, 200);
+      assert.strictEqual(xpiRes.headers['content-type'], 'application/x-xpinstall');
+
+      // /download/crx alias
+      const crxRes = await httpGet('/download/crx');
+      assert.strictEqual(crxRes.statusCode, 200);
+      assert.strictEqual(crxRes.headers['content-type'], 'application/x-chrome-extension');
+
+      // Omaha default appid
+      const defaultOmaha = await httpGet('/updates/brave/updates.xml');
+      assert.strictEqual(defaultOmaha.statusCode, 200);
+      assert.ok(defaultOmaha.body.toString('utf8').includes("<app appid='zen-brave-chat'>"));
+
+      // Omaha multiple appids query
+      const multiOmaha = await httpGet('/updates/brave/updates.xml?x=id%3Dapp-one%26v%3D1.0.0&x=id%3Dapp-two%26v%3D1.0.0');
+      assert.strictEqual(multiOmaha.statusCode, 200);
+      const multiXml = multiOmaha.body.toString('utf8');
+      assert.ok(multiXml.includes("<app appid='app-one'>"));
+      assert.ok(multiXml.includes("<app appid='app-two'>"));
     });
 
   } finally {

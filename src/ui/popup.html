@@ -73,6 +73,7 @@
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
         <span>Settings</span>
+        <span id="settings-update-dot" class="update-dot hidden" title="Update available"></span>
       </button>
     </nav>
 
@@ -336,8 +337,64 @@
           </div>
         </div>
 
+        <!-- Extension Updates & Version Card -->
+        <div class="card update-card">
+          <div class="update-card-header">
+            <div>
+              <h3 class="card-title">Extension Updates</h3>
+              <p class="card-desc">Keep your extension synced with the latest features.</p>
+            </div>
+            <span id="update-status-badge" class="update-status-badge up-to-date">Up to Date</span>
+          </div>
+
+          <div class="update-version-row">
+            <span class="version-label">Installed Version:</span>
+            <span id="installed-version-tag" class="version-tag">v1.0.3</span>
+            <span id="installed-browser-tag" class="browser-tag">Zen</span>
+          </div>
+
+          <div class="update-actions-row">
+            <button id="check-updates-btn" class="btn btn-sm btn-outline">
+              <svg id="check-updates-icon" class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span>Check for Updates</span>
+            </button>
+            <span id="update-last-checked" class="update-last-checked">Never checked</span>
+          </div>
+
+          <!-- Update Available Box -->
+          <div id="update-available-box" class="update-available-box hidden">
+            <div class="update-alert-banner">
+              <span class="update-alert-icon">✨</span>
+              <div class="update-alert-content">
+                <div class="update-alert-title">Update Available: <strong id="remote-version-tag">v1.0.3</strong></div>
+                <div class="update-alert-date" id="remote-release-date">New release available</div>
+              </div>
+            </div>
+
+            <div class="update-changelog-section">
+              <span class="changelog-header">What's New:</span>
+              <ul id="update-changelog-list" class="update-changelog-list"></ul>
+            </div>
+
+            <div class="update-install-actions">
+              <button id="update-now-btn" class="btn btn-primary btn-block">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Update Now in Browser</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="card about-card">
-          <h4 class="about-title">Zen & Brave Link Chat v1.0.0</h4>
+          <h4 class="about-title" id="about-version-title">Zen & Brave Link Chat v1.0.3</h4>
           <p class="about-desc">Hybrid WebRTC P2P + Zero-Dependency WebSocket Relay for seamless Firefox/Zen and Brave sharing.</p>
         </div>
       </section>

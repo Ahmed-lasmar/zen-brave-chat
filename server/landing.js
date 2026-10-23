@@ -249,15 +249,20 @@ function renderLandingPage(wsEndpoint, stats = {}) {
             </div>
           </div>
           <ul class="steps">
-            <li><span class="step-num">1</span> Download & extract the zip file</li>
-            <li><span class="step-num">2</span> Open <code>about:debugging#/runtime/this-firefox</code></li>
-            <li><span class="step-num">3</span> Click <strong>"Load Temporary Add-on..."</strong> & select <code>manifest.json</code></li>
+            <li><span class="step-num">1</span> Click <strong>"Install / Update Add-on (.xpi)"</strong> below</li>
+            <li><span class="step-num">2</span> Zen prompts: <strong>"Add Zen &amp; Brave Link &amp; Chat?"</strong></li>
+            <li><span class="step-num">3</span> Click <strong>Add</strong> to install or update instantly!</li>
           </ul>
         </div>
-        <a href="/download/zen" class="btn btn-zen">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Download for Zen (.zip)
-        </a>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <a href="/download/zen.xpi" class="btn btn-zen">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Install / Update in Zen (.xpi)
+          </a>
+          <a href="/download/zen" style="text-align: center; font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 4px;">
+            or download offline .zip archive
+          </a>
+        </div>
       </div>
 
       <!-- Brave Card -->
@@ -328,7 +333,7 @@ function renderLandingPage(wsEndpoint, stats = {}) {
     </div>
 
     <footer>
-      <div>Zen & Brave Link & Media Chat &bull; Relay Server v1.0.0</div>
+      <div>Zen & Brave Link & Media Chat &bull; Relay Server v1.0.3</div>
       <div>
         <a href="https://github.com/Ahmed-lasmar/zen-brave-chat" target="_blank" rel="noopener">GitHub</a> &bull;
         <a href="/?json=1">JSON API Status</a>

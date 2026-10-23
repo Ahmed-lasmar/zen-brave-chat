@@ -177,6 +177,80 @@ function buildTarget(targetName, overrideManifestName) {
   console.log(`✅ ${targetName.toUpperCase()} build complete at: ${targetDist}`);
 }
 
+function buildCrx3(zipBuffer, privateKeyPemPath, outputPath) {
+  const crypto = require('crypto');
+  let privateKey;
+  if (fs.existsSync(privateKeyPemPath)) {
+    privateKey = crypto.createPrivateKey(fs.readFileSync(privateKeyPemPath, 'utf8'));
+  } else {
+    const keyPair = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+    });
+    fs.writeFileSync(privateKeyPemPath, keyPair.privateKey, 'utf8');
+    privateKey = crypto.createPrivateKey(keyPair.privateKey);
+  }
+
+  const publicKey = crypto.createPublicKey(privateKey);
+  const derPub = publicKey.export({ type: 'spki', format: 'der' });
+  const crxId = crypto.createHash('sha256').update(derPub).digest().subarray(0, 16);
+
+  function encodeVarint(num) {
+    const bytes = [];
+    while (num > 0x7f) {
+      bytes.push((num & 0x7f) | 0x80);
+      num >>>= 7;
+    }
+    bytes.push(num & 0x7f);
+    return Buffer.from(bytes);
+  }
+
+  function encodeLengthDelimited(fieldNumber, data) {
+    const tag = encodeVarint((fieldNumber << 3) | 2);
+    const len = encodeVarint(data.length);
+    return Buffer.concat([tag, len, data]);
+  }
+
+  // SignedData: field 1 = crx_id (16 bytes)
+  const signedHeaderData = encodeLengthDelimited(1, crxId);
+
+  // Sign: "CRX3 SignedData\x00" + len(signedHeaderData) [uint32 LE] + signedHeaderData + zipBuffer
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(Buffer.from('CRX3 SignedData\x00', 'utf8'));
+  const lenBuf = Buffer.alloc(4);
+  lenBuf.writeUInt32LE(signedHeaderData.length, 0);
+  sign.update(lenBuf);
+  sign.update(signedHeaderData);
+  sign.update(zipBuffer);
+  const signature = sign.sign(privateKey);
+
+  // AsymmetricKeyProof: field 1 = public_key, field 2 = signature
+  const proof = Buffer.concat([
+    encodeLengthDelimited(1, derPub),
+    encodeLengthDelimited(2, signature)
+  ]);
+
+  // CrxFileHeader: field 2 = sha256_with_rsa (proof), field 10000 = signed_header_data
+  const header = Buffer.concat([
+    encodeLengthDelimited(2, proof),
+    encodeLengthDelimited(10000, signedHeaderData)
+  ]);
+
+  // Construct CRX3 file: Magic "Cr24", Version 3 (uint32 LE), Header Length (uint32 LE), Header, Zip
+  const magic = Buffer.from('Cr24', 'utf8');
+  const version = Buffer.alloc(4);
+  version.writeUInt32LE(3, 0);
+  const headerLen = Buffer.alloc(4);
+  headerLen.writeUInt32LE(header.length, 0);
+
+  const crx = Buffer.concat([magic, version, headerLen, header, zipBuffer]);
+  fs.writeFileSync(outputPath, crx);
+
+  const idStr = Array.from(crxId).map(b => String.fromCharCode(97 + (b >> 4)) + String.fromCharCode(97 + (b & 0x0f))).join('');
+  return { id: idStr, sha256: crypto.createHash('sha256').update(crx).digest('hex') };
+}
+
 function main() {
   console.log('🚀 Starting Cross-Browser Extension Build Process...');
 
@@ -189,13 +263,39 @@ function main() {
   buildTarget('zen', 'manifest.zen.json');
   buildTarget('brave', 'manifest.brave.json');
 
-  // Package zip archives for quick friend distribution
+  // Package zip archives and browser add-on packages
   try {
     const { execSync } = require('child_process');
+    const crypto = require('crypto');
+
+    // 1. Package zip distributions
+    const zenZipPath = path.join(DIST_DIR, 'zen-extension.zip');
+    const braveZipPath = path.join(DIST_DIR, 'brave-extension.zip');
+    if (fs.existsSync(zenZipPath)) fs.unlinkSync(zenZipPath);
+    if (fs.existsSync(braveZipPath)) fs.unlinkSync(braveZipPath);
+
     execSync(`cd "${DIST_DIR}" && zip -r -q zen-extension.zip zen/ && zip -r -q brave-extension.zip brave/`, { stdio: 'ignore' });
     console.log('📦 Packaged zip downloads: dist/zen-extension.zip & dist/brave-extension.zip');
+
+    // 2. Package Zen/Firefox .xpi (files must be at the archive root)
+    const xpiPath = path.join(DIST_DIR, 'zen.xpi');
+    if (fs.existsSync(xpiPath)) fs.unlinkSync(xpiPath);
+    execSync(`cd "${path.join(DIST_DIR, 'zen')}" && zip -r -q "${xpiPath}" .`, { stdio: 'ignore' });
+
+    // Compute SHA-256 of zen.xpi
+    const xpiBuf = fs.readFileSync(xpiPath);
+    const xpiSha256 = crypto.createHash('sha256').update(xpiBuf).digest('hex');
+    fs.writeFileSync(path.join(DIST_DIR, 'zen.xpi.sha256'), xpiSha256, 'utf8');
+    console.log(`🦊 Packaged Zen/Firefox XPInstall: dist/zen.xpi (SHA-256: ${xpiSha256})`);
+
+    // 3. Package Brave/Chromium .crx archive (CRX3 with RSA-SHA256 signature)
+    const braveZipBuf = execSync(`cd "${path.join(DIST_DIR, 'brave')}" && zip -r -q - .`);
+    const crxPath = path.join(DIST_DIR, 'brave.crx');
+    const pemPath = path.join(__dirname, 'brave.pem');
+    const crxInfo = buildCrx3(braveZipBuf, pemPath, crxPath);
+    console.log(`🦁 Packaged Brave/Chromium CRX3 package: dist/brave.crx (ID: ${crxInfo.id}, SHA-256: ${crxInfo.sha256})`);
   } catch (err) {
-    // optional packaging
+    console.error('Packaging warning:', err.message);
   }
 
   console.log('\n======================================================');
