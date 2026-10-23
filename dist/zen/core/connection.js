@@ -42,6 +42,7 @@
       this.handlers = {
         statusChange: [],
         message: [],
+        reaction: [],
         peerJoined: [],
         peerLeft: [],
         peerUpdated: [],

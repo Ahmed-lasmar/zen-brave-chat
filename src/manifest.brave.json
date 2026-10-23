@@ -1,4 +1,14 @@
 {
+  "action": {
+    "default_title": "Zen & Brave Link & Chat",
+    "default_popup": "ui/popup.html",
+    "default_icon": {
+      "16": "ui/icons/icon-16.png",
+      "32": "ui/icons/icon-32.png",
+      "48": "ui/icons/icon-48.png",
+      "128": "ui/icons/icon-128.png"
+    }
+  },
   "background": {
     "service_worker": "background/background.js"
   },

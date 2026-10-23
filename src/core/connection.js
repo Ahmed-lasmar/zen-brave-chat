@@ -42,6 +42,7 @@
       this.handlers = {
         statusChange: [],
         message: [],
+        reaction: [],
         peerJoined: [],
         peerLeft: [],
         peerUpdated: [],
@@ -329,6 +330,17 @@
           break;
         }
 
+        case 'message-reaction': {
+          this.emit('reaction', {
+            targetMessageId: msg.targetMessageId,
+            reactions: msg.reactions,
+            emoji: msg.emoji,
+            senderId: msg.senderId,
+            senderName: msg.senderName
+          });
+          break;
+        }
+
         case 'history': {
           if (Array.isArray(msg.messages)) {
             for (const m of msg.messages) {
@@ -540,7 +552,9 @@
         senderId: this.peerId,
         senderName: this.userName,
         browser: BrowserAPI.detectBrowserName(),
-        timestamp: payload.timestamp || Date.now()
+        timestamp: payload.timestamp || Date.now(),
+        replyTo: payload.replyTo || null,
+        reactions: payload.reactions || {}
       };
 
       const hasP2P = this.dataChannel && this.dataChannel.readyState === 'open';

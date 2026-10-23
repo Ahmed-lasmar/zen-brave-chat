@@ -120,3 +120,22 @@ if (rawApi && rawApi.notifications && rawApi.notifications.onClicked) {
     } catch (_) {}
   });
 }
+
+// Toolbar action click listener (Gecko / Chrome)
+const actionApi = (rawApi && (rawApi.action || rawApi.browserAction)) || null;
+if (actionApi && actionApi.onClicked) {
+  actionApi.onClicked.addListener((tab) => {
+    console.log("Toolbar action clicked in tab:", tab ? tab.id : 'unknown');
+    try {
+      if (rawApi.sidebarAction && rawApi.sidebarAction.open) {
+        rawApi.sidebarAction.open();
+      } else if (rawApi.sidebarAction && rawApi.sidebarAction.toggle) {
+        rawApi.sidebarAction.toggle();
+      } else if (rawApi.sidePanel && rawApi.sidePanel.open && tab && tab.windowId) {
+        rawApi.sidePanel.open({ windowId: tab.windowId });
+      }
+    } catch (e) {
+      console.warn("Could not handle action onClicked:", e);
+    }
+  });
+}

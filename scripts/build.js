@@ -61,6 +61,47 @@ function validateManifest(distTargetDir, manifest) {
     }
   }
 
+  // Validate action icons exist
+  if (manifest.action && manifest.action.default_icon) {
+    if (typeof manifest.action.default_icon === 'string') {
+      const iconPath = path.join(distTargetDir, manifest.action.default_icon);
+      if (!fs.existsSync(iconPath)) {
+        errors.push(`Action icon ${manifest.action.default_icon} not found in ${distTargetDir}`);
+      }
+    } else if (typeof manifest.action.default_icon === 'object') {
+      for (const [size, iconRel] of Object.entries(manifest.action.default_icon)) {
+        const iconPath = path.join(distTargetDir, iconRel);
+        if (!fs.existsSync(iconPath)) {
+          errors.push(`Action icon ${iconRel} (${size}) not found in ${distTargetDir}`);
+        }
+      }
+    }
+  }
+
+  // Validate sidebar_action exists
+  if (manifest.sidebar_action) {
+    if (manifest.sidebar_action.default_panel) {
+      const panelPath = path.join(distTargetDir, manifest.sidebar_action.default_panel);
+      if (!fs.existsSync(panelPath)) {
+        errors.push(`Sidebar panel ${manifest.sidebar_action.default_panel} not found in ${distTargetDir}`);
+      }
+    }
+    if (manifest.sidebar_action.default_icon) {
+      const iconPath = path.join(distTargetDir, manifest.sidebar_action.default_icon);
+      if (!fs.existsSync(iconPath)) {
+        errors.push(`Sidebar icon ${manifest.sidebar_action.default_icon} not found in ${distTargetDir}`);
+      }
+    }
+  }
+
+  // Validate side_panel exists
+  if (manifest.side_panel && manifest.side_panel.default_path) {
+    const panelPath = path.join(distTargetDir, manifest.side_panel.default_path);
+    if (!fs.existsSync(panelPath)) {
+      errors.push(`Side panel ${manifest.side_panel.default_path} not found in ${distTargetDir}`);
+    }
+  }
+
   // Validate background scripts exist
   if (manifest.background) {
     if (manifest.background.service_worker) {

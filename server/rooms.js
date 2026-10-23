@@ -209,6 +209,52 @@ class RoomManager {
         const senderId = message.senderId || msgPayload.senderId || (peerRecord ? peerRecord.peerId : 'unknown');
         const senderName = msgPayload.senderName || (registeredPeer ? registeredPeer.name : 'Friend');
 
+        // Handle emoji reaction directly if message payload type is reaction
+        if (msgPayload.type === 'reaction') {
+          const targetId = msgPayload.targetMessageId || msgPayload.targetId;
+          const emoji = msgPayload.emoji;
+          if (targetId && emoji) {
+            let targetReactions = {};
+            const target = room.messageQueue.find(m => m.id === targetId);
+            const senderKey = senderName || senderId;
+
+            if (target) {
+              target.reactions = target.reactions || {};
+              target.reactions[emoji] = target.reactions[emoji] || [];
+              const idx = target.reactions[emoji].indexOf(senderKey);
+              if (idx >= 0) {
+                target.reactions[emoji].splice(idx, 1);
+                if (target.reactions[emoji].length === 0) {
+                  delete target.reactions[emoji];
+                }
+              } else {
+                target.reactions[emoji].push(senderKey);
+              }
+              targetReactions = target.reactions;
+              room.lastActivity = Date.now();
+              this.saveStorage();
+            }
+
+            // Broadcast reaction update to all peers in room
+            this.broadcastToRoom(room.id, {
+              type: 'message-reaction',
+              roomId: room.id,
+              targetMessageId: targetId,
+              reactions: targetReactions,
+              emoji: emoji,
+              senderId: senderId,
+              senderName: senderKey
+            });
+
+            ws.send({
+              type: 'ack',
+              messageId: targetId,
+              timestamp: Date.now()
+            });
+            break;
+          }
+        }
+
         const storedMessage = {
           ...msgPayload,
           id: msgPayload.id || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -227,7 +273,9 @@ class RoomManager {
           senderId: senderId,
           senderName: senderName,
           browser: msgPayload.browser || (registeredPeer ? registeredPeer.browser : 'unknown'),
-          timestamp: msgPayload.timestamp || Date.now()
+          timestamp: msgPayload.timestamp || Date.now(),
+          replyTo: msgPayload.replyTo || null,
+          reactions: msgPayload.reactions || {}
         };
 
         // Add to offline queue

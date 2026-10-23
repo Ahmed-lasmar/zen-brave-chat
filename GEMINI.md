@@ -67,10 +67,11 @@ The project connects desktop browsers (**Zen Browser** and **Brave**) with mobil
 ```bash
 npm test
 ```
-Executes all 34 unit and E2E simulation tests across:
+Executes all 41 unit and E2E simulation tests across:
 - `tests/server.test.js` (Relay & room protocol)
 - `tests/storage.test.js` (Storage & tab parsing)
 - `tests/connection.test.js` (ConnectionManager & protocol)
+- `tests/extension.test.js` (Manifest V3, interactive action toolbar button with `default_area: "navbar"`, and event handlers)
 - `tests/android.test.js` (Android distribution, insets, notifications, and APK checks)
 - `scripts/test-connection.js` (Multi-client E2E simulation)
 

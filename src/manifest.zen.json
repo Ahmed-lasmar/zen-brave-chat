@@ -5,13 +5,24 @@
       "strict_min_version": "109.0"
     }
   },
-  "background": {
-    "scripts": ["background/background.js"]
+  "action": {
+    "default_title": "Zen & Brave Link & Chat",
+    "default_popup": "ui/popup.html",
+    "default_icon": {
+      "16": "ui/icons/icon-16.png",
+      "32": "ui/icons/icon-32.png",
+      "48": "ui/icons/icon-48.png",
+      "128": "ui/icons/icon-128.png"
+    },
+    "default_area": "navbar"
   },
   "sidebar_action": {
     "default_panel": "ui/popup.html",
-    "default_title": "Zen & Brave Link Chat",
+    "default_title": "Zen & Brave Link & Chat",
     "default_icon": "ui/icons/icon-32.png"
+  },
+  "background": {
+    "scripts": ["background/background.js"]
   },
   "permissions": [
     "tabs",
