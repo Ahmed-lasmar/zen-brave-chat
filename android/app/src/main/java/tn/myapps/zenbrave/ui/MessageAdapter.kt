@@ -93,6 +93,16 @@ class MessageAdapter(
         notifyDataSetChanged()
     }
 
+    private fun formatSender(msg: ChatMessage): String {
+        if (msg.isOutgoing) return "You"
+        val name = if (msg.senderName.isNotBlank() && !msg.senderName.equals("null", ignoreCase = true)) msg.senderName else "Friend"
+        return if (!msg.browser.isNullOrBlank() && !msg.browser.equals("Unknown", ignoreCase = true) && !msg.browser.equals("null", ignoreCase = true)) {
+            "$name (${msg.browser})"
+        } else {
+            name
+        }
+    }
+
     inner class TextViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val row: LinearLayout = itemView.findViewById(R.id.llMessageRow)
         private val container: LinearLayout = itemView.findViewById(R.id.llBubbleContainer)
@@ -114,7 +124,7 @@ class MessageAdapter(
                 row.gravity = Gravity.START
                 container.gravity = Gravity.START
                 tvSender.visibility = View.VISIBLE
-                tvSender.text = "${msg.senderName} (${msg.browser})"
+                tvSender.text = formatSender(msg)
                 tvText.background = ContextCompat.getDrawable(context, R.drawable.bg_bubble_incoming)
                 tvText.setTextColor(ContextCompat.getColor(context, R.color.text_primary))
             }
@@ -131,7 +141,7 @@ class MessageAdapter(
 
         fun bind(msg: ChatMessage) {
             row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
-            tvSender.text = if (msg.isOutgoing) "You" else "${msg.senderName} (${msg.browser})"
+            tvSender.text = formatSender(msg)
 
             val cleanDomain = if (msg.domain.isNullOrEmpty() || msg.domain.equals("null", ignoreCase = true)) null else msg.domain
             val cleanTitle = if (msg.title.isNullOrEmpty() || msg.title.equals("null", ignoreCase = true)) null else msg.title
@@ -170,7 +180,7 @@ class MessageAdapter(
 
         fun bind(msg: ChatMessage) {
             row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
-            tvSender.text = if (msg.isOutgoing) "You" else "${msg.senderName} (${msg.browser})"
+            tvSender.text = formatSender(msg)
             tvTime?.text = timeFormatter.format(Date(msg.timestamp))
 
             val rawData = msg.media?.data ?: ""
@@ -213,7 +223,7 @@ class MessageAdapter(
 
         fun bind(msg: ChatMessage) {
             row.gravity = if (msg.isOutgoing) Gravity.END else Gravity.START
-            tvSender.text = if (msg.isOutgoing) "You" else "${msg.senderName} (${msg.browser})"
+            tvSender.text = formatSender(msg)
             tvTitle.text = if (msg.text.isNotEmpty()) msg.text else "🎤 Voice Note"
             tvMeta.text = timeFormatter.format(Date(msg.timestamp))
 

@@ -43,22 +43,27 @@ if (rawApi && rawApi.runtime && rawApi.runtime.onMessage) {
 
       // Create desktop notification
       if (rawApi.notifications && rawApi.notifications.create) {
-        let title = `Zen & Brave: ${msg.senderName || 'Friend'}`;
+        let title = msg.senderName || 'Friend';
         let body = '';
 
         if (msg.type === 'link' || msg.link) {
-          title = `🔗 Link from ${msg.senderName || 'Friend'}`;
+          title = `🔗 ${msg.senderName || 'Friend'}`;
           body = (msg.link && msg.link.title) || msg.url || 'Shared a link';
         } else if (msg.type === 'voice' || (msg.media && msg.media.type === 'voice')) {
-          body = '🎤 Sent a voice note';
+          title = `🎤 ${msg.senderName || 'Friend'}`;
+          body = 'Sent a voice note';
+        } else if (msg.type === 'image' || (msg.media && msg.media.type === 'image')) {
+          title = `📷 ${msg.senderName || 'Friend'}`;
+          body = `Sent an image: ${(msg.media && msg.media.name) || 'image'}`;
         } else if (msg.type === 'media' || msg.media) {
-          body = `📎 Sent ${msg.media.type === 'image' ? 'an image' : 'a file'}: ${msg.media.name || ''}`;
+          title = `📎 ${msg.senderName || 'Friend'}`;
+          body = `Sent a file: ${msg.media.name || 'file'}`;
         } else {
           body = msg.text || 'Sent a message';
         }
 
         try {
-          rawApi.notifications.create(msg.id || 'msg-notify', {
+          rawApi.notifications.create(msg.id || `msg-${Date.now()}`, {
             type: 'basic',
             iconUrl: (rawApi.runtime && rawApi.runtime.getURL('ui/icons/icon-128.png')) || '',
             title: title,
@@ -89,9 +94,29 @@ if (rawApi && rawApi.runtime && rawApi.runtime.onMessage) {
   });
 }
 
-// Notification click handler: opens the link if notification was for a link
+// Notification click handler: focuses the extension sidebar / side panel / window
 if (rawApi && rawApi.notifications && rawApi.notifications.onClicked) {
   rawApi.notifications.onClicked.addListener((notificationId) => {
     updateBadge(0);
+    try {
+      rawApi.notifications.clear(notificationId, () => {});
+    } catch (_) {}
+
+    // Focus the browser window and activate sidebar/side-panel
+    try {
+      if (rawApi.windows) {
+        rawApi.windows.getLastFocused({ populate: true }, (win) => {
+          if (win && win.id) {
+            try { rawApi.windows.update(win.id, { focused: true }); } catch (_) {}
+            if (rawApi.sidePanel && rawApi.sidePanel.open) {
+              try { rawApi.sidePanel.open({ windowId: win.id }); } catch (_) {}
+            }
+          }
+        });
+      }
+      if (rawApi.sidebarAction && rawApi.sidebarAction.open) {
+        try { rawApi.sidebarAction.open(); } catch (_) {}
+      }
+    } catch (_) {}
   });
 }

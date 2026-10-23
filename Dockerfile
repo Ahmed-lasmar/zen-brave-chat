@@ -6,12 +6,13 @@ WORKDIR /app
 # Copy package definition
 COPY package.json ./
 
-# Copy server, scripts, tests, sources, and dist packages
+# Copy server, scripts, tests, sources, android, and dist packages
 COPY server/ ./server/
 COPY scripts/ ./scripts/
 COPY tests/ ./tests/
 COPY src/ ./src/
 COPY dist/ ./dist/
+COPY android/ ./android/
 COPY manifest.common.json ./
 
 # Environment defaults

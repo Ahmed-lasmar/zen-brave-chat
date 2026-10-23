@@ -75,11 +75,12 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    echo '=== Verifying Server Health ==='
+                    echo '=== Verifying Server Health & API Endpoints ==='
                     sleep(time: 3, unit: 'SECONDS')
                     sh """
                         docker ps --filter "name=${CONTAINER_NAME}" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
                         docker exec ${CONTAINER_NAME} node -e "require('http').get('http://localhost:${PORT}/health', (r) => { console.log('Relay server health status:', r.statusCode); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', (e) => { console.error(e); process.exit(1); })"
+                        docker exec ${CONTAINER_NAME} node -e "require('http').get('http://localhost:${PORT}/api/version', (r) => { console.log('Version API endpoint status:', r.statusCode); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', (e) => { console.error(e); process.exit(1); })"
                     """
                 }
             }

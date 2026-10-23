@@ -236,6 +236,21 @@ async function runEndToEndSimulation() {
     assert.strictEqual(offlineReceived.url, 'https://brave.com/search');
     console.log('✅ Step 5: Offline message queue replayed successfully upon reconnection');
 
+    // 8. Real-Time Custom Username Update & Synchronization
+    console.log('[E2E] Brave updates custom display name to "Brave PowerUser"...');
+    let zenSawPeerUpdate = null;
+    clientZen.on('peerUpdated', (data) => {
+      zenSawPeerUpdate = data;
+    });
+
+    clientBrave2.updateUserName('Brave PowerUser');
+    await new Promise(r => setTimeout(r, 100));
+
+    assert.ok(zenSawPeerUpdate, 'Zen should receive peerUpdated event');
+    assert.strictEqual(zenSawPeerUpdate.peer.name, 'Brave PowerUser');
+    assert.strictEqual(zenSawPeerUpdate.oldName, 'Brave Friend');
+    console.log('✅ Step 6: Custom username synchronized live across peers');
+
     clientZen.leaveRoom();
     clientBrave2.leaveRoom();
     if (clientZen.ws) clientZen.ws.close();

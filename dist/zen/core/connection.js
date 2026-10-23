@@ -44,6 +44,7 @@
         message: [],
         peerJoined: [],
         peerLeft: [],
+        peerUpdated: [],
         roomJoined: [],
         error: []
       };
@@ -203,6 +204,19 @@
       });
     }
 
+    updateUserName(newName) {
+      if (!newName) return;
+      this.userName = newName.trim();
+      if (this.ws && this.ws.readyState === 1 && this.roomId) {
+        this._sendWs({
+          type: 'update-username',
+          roomId: this.roomId,
+          peerId: this.peerId,
+          name: this.userName
+        });
+      }
+    }
+
     leaveRoom() {
       this.intentionalClose = true;
       if (this.reconnectTimer) {
@@ -294,6 +308,14 @@
             this._updateState('connected', 'relay');
           }
           this.emit('peerLeft', msg);
+          break;
+        }
+
+        case 'peer-updated': {
+          this.emit('peerUpdated', {
+            peer: msg.peer,
+            oldName: msg.oldName
+          });
           break;
         }
 

@@ -1,6 +1,8 @@
 package tn.myapps.zenbrave.ui
 
 import android.Manifest
+import android.app.AlertDialog
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -39,11 +41,17 @@ import tn.myapps.zenbrave.model.PeerInfo
 import tn.myapps.zenbrave.net.RelayListener
 import tn.myapps.zenbrave.net.RelayWebSocketClient
 import tn.myapps.zenbrave.update.AppUpdateManager
+import tn.myapps.zenbrave.util.NotificationHelper
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 
 class MainActivity : AppCompatActivity(), RelayListener {
+
+    companion object {
+        const val EXTRA_ROOM_ID = "extra_room_id"
+        const val EXTRA_FROM_NOTIFICATION = "extra_from_notification"
+    }
 
     private lateinit var prefs: RoomPreferences
     private lateinit var client: RelayWebSocketClient
@@ -53,8 +61,11 @@ class MainActivity : AppCompatActivity(), RelayListener {
     private lateinit var vStatusDot: View
     private lateinit var tvStatusText: TextView
     private lateinit var tvActiveRoomBadge: TextView
+    private lateinit var btnEditUserName: TextView
     private lateinit var btnCheckAppUpdate: TextView
     private lateinit var panelConnect: LinearLayout
+    private lateinit var etMainUserName: EditText
+    private lateinit var btnSaveUserName: Button
     private lateinit var etMainRoomCode: EditText
     private lateinit var btnMainJoinRoom: Button
     private lateinit var btnMainCreateRoom: Button
@@ -75,6 +86,7 @@ class MainActivity : AppCompatActivity(), RelayListener {
     private var recordingStartTime = 0L
     private val voiceTimerHandler = Handler(Looper.getMainLooper())
     private var currentVoiceFile: File? = null
+    private var isChatInForeground: Boolean = false
 
     private var reconnectHandler = Handler(Looper.getMainLooper())
     private var reconnectAttempt = 0
@@ -117,11 +129,54 @@ class MainActivity : AppCompatActivity(), RelayListener {
         setupRecyclerView()
         setupRecentChips()
 
+        // Initialize notification channel for message alerts
+        NotificationHelper.createNotificationChannel(this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
         // Auto-connect to server
         connectToServer()
 
         // Background update check
         checkForUpdates(isUserInitiated = false)
+
+        handleNotificationOrRoomIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isChatInForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isChatInForeground = false
+    }
+
+    private fun isAppBackgroundedOrScreenLocked(): Boolean {
+        if (!isChatInForeground) return true
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        return km?.isKeyguardLocked == true
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationOrRoomIntent(intent)
+    }
+
+    private fun handleNotificationOrRoomIntent(intent: Intent?) {
+        val targetRoom = intent?.getStringExtra(EXTRA_ROOM_ID)
+        if (!targetRoom.isNullOrBlank()) {
+            val clean = targetRoom.trim().uppercase()
+            if (client.currentRoomId != clean) {
+                joinTargetRoom(clean)
+            }
+        }
     }
 
     private fun setupWindowInsets() {
@@ -176,8 +231,11 @@ class MainActivity : AppCompatActivity(), RelayListener {
         vStatusDot = findViewById(R.id.vStatusDot)
         tvStatusText = findViewById(R.id.tvStatusText)
         tvActiveRoomBadge = findViewById(R.id.tvActiveRoomBadge)
+        btnEditUserName = findViewById(R.id.btnEditUserName)
         btnCheckAppUpdate = findViewById(R.id.btnCheckAppUpdate)
         panelConnect = findViewById(R.id.panelConnect)
+        etMainUserName = findViewById(R.id.etMainUserName)
+        btnSaveUserName = findViewById(R.id.btnSaveUserName)
         etMainRoomCode = findViewById(R.id.etMainRoomCode)
         btnMainJoinRoom = findViewById(R.id.btnMainJoinRoom)
         btnMainCreateRoom = findViewById(R.id.btnMainCreateRoom)
@@ -192,6 +250,21 @@ class MainActivity : AppCompatActivity(), RelayListener {
         tvVoiceRecordingTimer = findViewById(R.id.tvVoiceRecordingTimer)
         btnVoiceCancel = findViewById(R.id.btnVoiceCancel)
         btnVoiceSend = findViewById(R.id.btnVoiceSend)
+
+        // Initialize username fields
+        etMainUserName.setText(prefs.userName)
+        btnEditUserName.text = "👤 ${prefs.userName}"
+
+        btnEditUserName.setOnClickListener {
+            showEditUsernameDialog()
+        }
+
+        btnSaveUserName.setOnClickListener {
+            val newName = etMainUserName.text.toString().trim()
+            if (newName.isNotEmpty()) {
+                saveAndApplyUserName(newName)
+            }
+        }
 
         tvActiveRoomBadge.setOnClickListener {
             // Toggle connect panel to switch rooms
@@ -212,6 +285,10 @@ class MainActivity : AppCompatActivity(), RelayListener {
         }
 
         btnMainJoinRoom.setOnClickListener {
+            val newName = etMainUserName.text.toString().trim()
+            if (newName.isNotEmpty() && newName != prefs.userName) {
+                saveAndApplyUserName(newName)
+            }
             val code = etMainRoomCode.text.toString().trim().uppercase()
             if (code.isEmpty()) {
                 Toast.makeText(this, "Please enter a room code", Toast.LENGTH_SHORT).show()
@@ -221,6 +298,10 @@ class MainActivity : AppCompatActivity(), RelayListener {
         }
 
         btnMainCreateRoom.setOnClickListener {
+            val newName = etMainUserName.text.toString().trim()
+            if (newName.isNotEmpty() && newName != prefs.userName) {
+                saveAndApplyUserName(newName)
+            }
             if (client.isConnected) {
                 client.createRoom(prefs.userName, prefs.peerId)
             } else {
@@ -367,6 +448,38 @@ class MainActivity : AppCompatActivity(), RelayListener {
         } else {
             client.joinRoom(clean, prefs.userName, prefs.peerId)
         }
+    }
+
+    private fun saveAndApplyUserName(newName: String) {
+        val clean = newName.trim()
+        if (clean.isBlank()) return
+        prefs.userName = clean
+        etMainUserName.setText(clean)
+        btnEditUserName.text = "👤 $clean"
+        client.updateUserName(clean)
+        Toast.makeText(this, "Display name set to: $clean", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showEditUsernameDialog() {
+        val input = EditText(this).apply {
+            setText(prefs.userName)
+            setSelection(prefs.userName.length)
+            hint = "Enter display name"
+            setPadding(40, 30, 40, 30)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Change Display Name")
+            .setMessage("Choose your custom username visible to friends in Zen & Brave chat:")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val newName = input.text.toString().trim()
+                if (newName.isNotEmpty()) {
+                    saveAndApplyUserName(newName)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun sendTextMessage() {
@@ -661,11 +774,30 @@ class MainActivity : AppCompatActivity(), RelayListener {
         rvMessages.scrollToPosition(adapter.itemCount - 1)
     }
 
+    override fun onPeerUpdated(peer: PeerInfo, oldName: String) {
+        val sysMsg = ChatMessage(
+            type = "system",
+            text = "$oldName is now known as ${peer.name} ✨"
+        )
+        adapter.addMessage(sysMsg)
+        layoutEmptyState.visibility = View.GONE
+        rvMessages.scrollToPosition(adapter.itemCount - 1)
+        triggerHaptic()
+    }
+
     override fun onMessageReceived(message: ChatMessage) {
         adapter.addMessage(message)
         layoutEmptyState.visibility = View.GONE
         rvMessages.scrollToPosition(adapter.itemCount - 1)
         triggerHaptic()
+
+        // High-importance native background notification when app is backgrounded or screen is locked
+        if (!message.isOutgoing && isAppBackgroundedOrScreenLocked()) {
+            val targetRoom = client.currentRoomId ?: prefs.lastRoomId ?: ""
+            if (targetRoom.isNotEmpty()) {
+                NotificationHelper.showMessageNotification(this, message, targetRoom)
+            }
+        }
     }
 
     override fun onError(error: String) {

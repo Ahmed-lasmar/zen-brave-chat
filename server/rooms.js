@@ -276,6 +276,29 @@ class RoomManager {
         break;
       }
 
+      case 'update-username': {
+        const peerRecord = this.peerToRoom.get(ws);
+        if (!peerRecord) return;
+
+        const room = this.rooms.get(peerRecord.roomId);
+        if (!room) return;
+
+        const peer = room.peers.get(peerRecord.peerId);
+        const newName = (message.name || '').trim();
+        if (peer && newName) {
+          const oldName = peer.name;
+          peer.name = newName;
+          this.broadcastToRoom(room.id, {
+            type: 'peer-updated',
+            roomId: room.id,
+            peer: { id: peer.id, name: peer.name, browser: peer.browser },
+            oldName: oldName
+          });
+          this.saveStorage();
+        }
+        break;
+      }
+
       case 'ping': {
         ws.send({ type: 'pong', timestamp: Date.now() });
         break;

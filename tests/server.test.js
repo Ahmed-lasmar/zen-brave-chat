@@ -270,6 +270,37 @@ async function runTests() {
       client.close();
     });
 
+    // 9. Custom username update & presence sync
+    await test('Custom username update synchronizes presence and broadcasts peer-updated event', async () => {
+      const clientA = await connectWebSocket(wsUrl);
+      const clientB = await connectWebSocket(wsUrl);
+
+      const roomId = 'ZEN-NAME-SYNC';
+      let peerUpdatedEvent = null;
+
+      clientB.on('message', (raw) => {
+        const msg = JSON.parse(raw);
+        if (msg.type === 'peer-updated') {
+          peerUpdatedEvent = msg;
+        }
+      });
+
+      clientA.send({ type: 'join-room', roomId, peerId: 'peer-user-a', name: 'AliceOriginal', browser: 'Zen' });
+      clientB.send({ type: 'join-room', roomId, peerId: 'peer-user-b', name: 'Bob', browser: 'Brave' });
+      await new Promise(r => setTimeout(r, 80));
+
+      clientA.send({ type: 'update-username', name: 'AliceCustom' });
+      await new Promise(r => setTimeout(r, 80));
+
+      assert.ok(peerUpdatedEvent, 'clientB should receive peer-updated event');
+      assert.strictEqual(peerUpdatedEvent.oldName, 'AliceOriginal');
+      assert.strictEqual(peerUpdatedEvent.peer.name, 'AliceCustom');
+      assert.strictEqual(peerUpdatedEvent.peer.id, 'peer-user-a');
+
+      clientA.close();
+      clientB.close();
+    });
+
   } finally {
     await app.close();
     if (fs.existsSync(testStoragePath)) {

@@ -913,6 +913,58 @@ body {
   margin-left: 6px;
 }
 
+.user-display-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.user-display-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.quick-username-input {
+  flex: 1;
+  height: 30px;
+  padding: 0 8px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.quick-username-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.message-meta .sender-name {
+  font-weight: 600;
+}
+
+.message-meta .sender-name.peer {
+  color: var(--accent-color);
+}
+
+.message-meta .sender-name.me {
+  color: var(--text-secondary);
+}
+
+.message-meta .peer-browser-tag {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
 .recent-rooms-chips {
   display: flex;
   flex-wrap: wrap;

@@ -17,6 +17,7 @@ interface RelayListener {
     fun onRoomJoined(roomId: String, peerId: String, peers: List<PeerInfo>, history: List<ChatMessage>) {}
     fun onPeerJoined(peer: PeerInfo) {}
     fun onPeerLeft(peerId: String, name: String) {}
+    fun onPeerUpdated(peer: PeerInfo, oldName: String) {}
     fun onMessageReceived(message: ChatMessage) {}
     fun onMessageAck(messageId: String) {}
     fun onError(error: String) {}
@@ -136,6 +137,23 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
             put("name", userName)
         }
         webSocket?.send(json.toString())
+    }
+
+    fun updateUserName(userName: String) {
+        val clean = userName.trim()
+        if (clean.isEmpty()) return
+        pendingUserName = clean
+        val room = currentRoomId
+        val peerId = currentPeerId
+        if (isConnected && room != null && peerId != null) {
+            val json = JSONObject().apply {
+                put("type", "update-username")
+                put("roomId", room)
+                put("peerId", peerId)
+                put("name", clean)
+            }
+            webSocket?.send(json.toString())
+        }
     }
 
     fun sendRelayMessage(roomId: String, msg: ChatMessage, onSent: (() -> Unit)? = null): Boolean {
@@ -268,6 +286,21 @@ class RelayWebSocketClient(private var listener: RelayListener? = null) {
                     val peerId = json.optString("peerId")
                     val name = json.optString("name", "Friend")
                     listener?.onPeerLeft(peerId, name)
+                }
+
+                "peer-updated" -> {
+                    val p = json.optJSONObject("peer")
+                    val oldName = json.optString("oldName", "Friend")
+                    if (p != null) {
+                        listener?.onPeerUpdated(
+                            PeerInfo(
+                                id = p.optString("id"),
+                                name = p.optString("name", "Friend"),
+                                browser = p.optString("browser", "Desktop")
+                            ),
+                            oldName
+                        )
+                    }
                 }
 
                 "relayed-message" -> {

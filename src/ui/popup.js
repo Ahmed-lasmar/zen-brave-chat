@@ -48,6 +48,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const myPeerName = document.getElementById('my-peer-name');
   const myPeerBrowser = document.getElementById('my-peer-browser');
   const recentRoomsContainer = document.getElementById('recent-rooms-container');
+  const quickUsernameInput = document.getElementById('quick-username-input');
+  const quickSaveUsernameBtn = document.getElementById('quick-save-username-btn');
 
   // Settings Pane
   const settingUsername = document.getElementById('setting-username');
@@ -72,12 +74,66 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 1. Initialize Appearance & Settings
   applyTheme(settings.theme);
   settingUsername.value = settings.userName;
+  if (quickUsernameInput) quickUsernameInput.value = settings.userName;
   settingServerUrl.value = settings.serverUrl;
   settingTheme.value = settings.theme;
   settingSound.checked = settings.soundEnabled;
   settingNotifications.checked = settings.notificationsEnabled;
   myPeerName.textContent = settings.userName;
   myPeerBrowser.textContent = BrowserAPI.detectBrowserName();
+
+  async function updateAndSaveUsername(newName) {
+    const cleanName = (newName || '').trim();
+    if (!cleanName) return;
+
+    settings = {
+      ...settings,
+      userName: cleanName
+    };
+    await AppStorage.saveSettings(settings);
+
+    settingUsername.value = cleanName;
+    if (quickUsernameInput) quickUsernameInput.value = cleanName;
+    if (myPeerName) myPeerName.textContent = cleanName;
+
+    const mePeerNameEl = peersList.querySelector('.peer-item.me .peer-name');
+    if (mePeerNameEl) mePeerNameEl.textContent = cleanName;
+
+    if (connection) {
+      connection.userName = cleanName;
+      connection.updateUserName(cleanName);
+    }
+
+    showToast(`Display name updated to: ${cleanName}`);
+  }
+
+  if (quickSaveUsernameBtn) {
+    quickSaveUsernameBtn.onclick = () => {
+      updateAndSaveUsername(quickUsernameInput.value);
+    };
+  }
+  if (quickUsernameInput) {
+    quickUsernameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        updateAndSaveUsername(quickUsernameInput.value);
+      }
+    });
+  }
+
+  // Clear unread badge when extension window / tab gains focus
+  window.addEventListener('focus', () => {
+    try {
+      BrowserAPI.runtime.sendMessage({ type: 'clear-badge' });
+    } catch (_) {}
+  });
+
+  // Request browser notification permission if not yet decided
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    try {
+      Notification.requestPermission().catch(() => {});
+    } catch (_) {}
+  }
 
   // 2. Initialize Connection
   initConnection();
@@ -246,6 +302,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       removePeerFromUI(peer.peerId);
     });
 
+    connection.on('peerUpdated', ({ peer, oldName }) => {
+      showToast(`${oldName || 'Friend'} is now ${peer.name}`);
+      const safeId = String(peer.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      const item = document.getElementById(`peer-${safeId}`);
+      if (item) {
+        const nameEl = item.querySelector('.peer-name');
+        if (nameEl) nameEl.textContent = peer.name;
+        const avatarEl = item.querySelector('.peer-avatar');
+        if (avatarEl) avatarEl.textContent = (peer.name || 'F').charAt(0).toUpperCase();
+      }
+    });
+
     connection.on('message', async (message) => {
       const isMe = message.senderId === connection.peerId;
       renderMessage(message, isMe);
@@ -259,11 +327,39 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!isMe) {
         playTone(false);
 
-        // Notify background worker for badge/system notification
-        BrowserAPI.runtime.sendMessage({
-          type: 'new-message',
-          message: message
-        });
+        // Native notification when sidebar/side-panel is unfocused or minimized
+        const isUnfocused = !document.hasFocus() || document.hidden;
+        if (isUnfocused && settings.notificationsEnabled) {
+          BrowserAPI.runtime.sendMessage({
+            type: 'new-message',
+            message: message,
+            unfocused: true
+          });
+
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try {
+              const title = message.senderName ? `${message.senderName}` : 'Zen & Brave Chat';
+              let body = message.text || '';
+              if (message.type === 'link' || message.link) {
+                body = `🔗 ${(message.link && message.link.title) || message.url || 'Shared a link'}`;
+              } else if (message.type === 'voice' || (message.media && message.media.type === 'voice')) {
+                body = '🎤 Sent a voice note';
+              } else if (message.type === 'image' || (message.media && message.media.type === 'image')) {
+                body = `📷 Sent an image: ${(message.media && message.media.name) || ''}`;
+              }
+              const iconUrl = (BrowserAPI.runtime && BrowserAPI.runtime.getURL) ? BrowserAPI.runtime.getURL('ui/icons/icon-128.png') : 'icons/icon-128.png';
+              const notif = new Notification(title, {
+                body: body,
+                icon: iconUrl,
+                tag: message.id || 'zen-brave-chat'
+              });
+              notif.onclick = () => {
+                window.focus();
+                notif.close();
+              };
+            } catch (_) {}
+          }
+        }
       }
 
       if (message.link) {
@@ -338,7 +434,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     meta.className = 'message-meta';
     const timeStr = new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const sender = isMe ? 'You' : escapeHtml(msg.senderName || 'Friend');
-    meta.innerHTML = `<span>${sender}</span> • <span>${escapeHtml(timeStr)}</span>`;
+    const browserTag = (!isMe && msg.browser && msg.browser !== 'Unknown' && msg.browser !== 'null') ? ` <span class="peer-browser-tag">${escapeHtml(msg.browser)}</span>` : '';
+    meta.innerHTML = `<span class="sender-name ${isMe ? 'me' : 'peer'}">${sender}</span>${browserTag} • <span class="message-time">${escapeHtml(timeStr)}</span>`;
     row.appendChild(meta);
 
     if (msg.type === 'link' || msg.link) {
@@ -1007,9 +1104,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     await AppStorage.saveSettings(settings);
     applyTheme(newTheme);
     myPeerName.textContent = newName;
+    if (quickUsernameInput) quickUsernameInput.value = newName;
+    const mePeerNameEl = peersList.querySelector('.peer-item.me .peer-name');
+    if (mePeerNameEl) mePeerNameEl.textContent = newName;
 
     if (connection) {
       connection.userName = newName;
+      connection.updateUserName(newName);
       if (connection.serverUrl !== newServer) {
         connection.serverUrl = newServer;
         connection.connectServer(newServer);

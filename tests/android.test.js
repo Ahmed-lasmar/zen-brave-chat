@@ -101,8 +101,8 @@ async function runTests() {
       assert.strictEqual(res.statusCode, 200);
       const data = JSON.parse(res.body.toString('utf8'));
       assert.ok(data.android, 'Response must have android version object');
-      assert.strictEqual(data.android.versionCode, 3, 'Version code should match build 3');
-      assert.strictEqual(data.android.versionName, '1.0.2', 'Version name should be 1.0.2');
+      assert.strictEqual(data.android.versionCode, 4, 'Version code should match build 4');
+      assert.strictEqual(data.android.versionName, '1.0.3', 'Version name should be 1.0.3');
       assert.ok(data.android.downloadUrl.includes('/download/android'), 'Must have direct APK downloadUrl');
       assert.ok(Array.isArray(data.android.changelog), 'Changelog must be array');
       assert.ok(data.android.changelog.length > 0, 'Changelog must not be empty');
@@ -141,6 +141,7 @@ async function runTests() {
       assert.ok(content.includes('android.permission.INTERNET'), 'Must declare INTERNET');
       assert.ok(content.includes('android.permission.ACCESS_NETWORK_STATE'), 'Must declare ACCESS_NETWORK_STATE');
       assert.ok(content.includes('android.permission.REQUEST_INSTALL_PACKAGES'), 'Must declare REQUEST_INSTALL_PACKAGES for in-app updates');
+      assert.ok(content.includes('android.permission.POST_NOTIFICATIONS'), 'Must declare POST_NOTIFICATIONS for Android 13+ alerts');
 
       // Check ShareActivity and filters
       assert.ok(content.includes('tn.myapps.zenbrave.ui.ShareActivity') || content.includes('.ui.ShareActivity'));
@@ -161,6 +162,48 @@ async function runTests() {
       assert.ok(content.includes('androidx.core.content.FileProvider'), 'Must declare FileProvider in manifest');
       const filePathsXml = path.join(__dirname, '../android/app/src/main/res/xml/file_paths.xml');
       assert.ok(fs.existsSync(filePathsXml), 'file_paths.xml must exist for FileProvider');
+    });
+
+    // 9. Native Android Notifications & Channel Configuration
+    await test('Native Android notification channel zen_brave_chat_messages and background suppression logic exist', async () => {
+      const notifHelperPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/util/NotificationHelper.kt');
+      assert.ok(fs.existsSync(notifHelperPath), 'NotificationHelper.kt must exist');
+      const notifCode = fs.readFileSync(notifHelperPath, 'utf8');
+      assert.ok(notifCode.includes('zen_brave_chat_messages'), 'Channel ID must be zen_brave_chat_messages');
+      assert.ok(notifCode.includes('NotificationManager.IMPORTANCE_HIGH'), 'Channel must have high importance');
+      assert.ok(notifCode.includes('enableVibration(true)'), 'Channel must enable vibration');
+      assert.ok(notifCode.includes('MainActivity::class.java'), 'Notification intent must target MainActivity');
+      assert.ok(notifCode.includes('MainActivity.EXTRA_ROOM_ID'), 'Must pass EXTRA_ROOM_ID in PendingIntent');
+
+      const mainActivityPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/ui/MainActivity.kt');
+      const mainCode = fs.readFileSync(mainActivityPath, 'utf8');
+      assert.ok(mainCode.includes('isChatInForeground'), 'MainActivity must track isChatInForeground');
+      assert.ok(mainCode.includes('isAppBackgroundedOrScreenLocked'), 'MainActivity must check background/screen lock state');
+      assert.ok(mainCode.includes('NotificationHelper.showMessageNotification'), 'MainActivity must trigger NotificationHelper on incoming messages');
+      assert.ok(mainCode.includes('handleNotificationOrRoomIntent'), 'MainActivity must route notification intents directly into room');
+    });
+
+    // 10. Custom Username Selection & Clean Sender Formatting on Android
+    await test('Android supports custom username editing, persistence, and clean sender display', async () => {
+      const prefsPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/data/RoomPreferences.kt');
+      const prefsCode = fs.readFileSync(prefsPath, 'utf8');
+      assert.ok(prefsCode.includes('var userName: String'), 'RoomPreferences must persist userName');
+
+      const layoutPath = path.join(__dirname, '../android/app/src/main/res/layout/activity_main.xml');
+      const layoutCode = fs.readFileSync(layoutPath, 'utf8');
+      assert.ok(layoutCode.includes('btnEditUserName'), 'Layout must have btnEditUserName top-bar button');
+      assert.ok(layoutCode.includes('etMainUserName'), 'Layout must have etMainUserName input');
+      assert.ok(layoutCode.includes('btnSaveUserName'), 'Layout must have btnSaveUserName button');
+
+      const mainActivityPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/ui/MainActivity.kt');
+      const mainCode = fs.readFileSync(mainActivityPath, 'utf8');
+      assert.ok(mainCode.includes('saveAndApplyUserName'), 'MainActivity must have saveAndApplyUserName');
+      assert.ok(mainCode.includes('showEditUsernameDialog'), 'MainActivity must have showEditUsernameDialog');
+      assert.ok(mainCode.includes('onPeerUpdated'), 'MainActivity must handle onPeerUpdated presence sync');
+
+      const adapterPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/ui/MessageAdapter.kt');
+      const adapterCode = fs.readFileSync(adapterPath, 'utf8');
+      assert.ok(adapterCode.includes('formatSender'), 'MessageAdapter must use formatSender for clean sender display');
     });
 
     // 7. Interactive Image Viewer and Lightbox Support
