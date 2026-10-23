@@ -301,6 +301,112 @@ async function runTests() {
       clientB.close();
     });
 
+    // 10. Reply to Message by Text or Emoji
+    await test('Relayed message with replyTo is broadcasted and preserved in room history', async () => {
+      const clientA = await connectWebSocket(wsUrl);
+      const clientB = await connectWebSocket(wsUrl);
+      const roomId = 'ZEN-RPLY';
+      let receivedReply = null;
+
+      clientB.on('message', (raw) => {
+        const msg = JSON.parse(raw);
+        if (msg.type === 'relayed-message' && msg.message && msg.message.replyTo) {
+          receivedReply = msg.message;
+        }
+      });
+
+      clientA.send({ type: 'join-room', roomId, peerId: 'peer-reply-a', name: 'Alice', browser: 'Zen' });
+      clientB.send({ type: 'join-room', roomId, peerId: 'peer-reply-b', name: 'Bob', browser: 'Brave' });
+      await new Promise(r => setTimeout(r, 80));
+
+      // Client A sends a reply message to Bob's earlier message
+      const replyPayload = {
+        id: 'msg-reply-1',
+        type: 'text',
+        text: 'I agree completely! 👍',
+        replyTo: {
+          id: 'msg-orig-1',
+          senderName: 'Bob',
+          text: 'Should we launch today?',
+          type: 'text'
+        },
+        senderId: 'peer-reply-a',
+        senderName: 'Alice',
+        timestamp: Date.now()
+      };
+
+      clientA.send({
+        type: 'relay-message',
+        roomId: roomId,
+        senderId: 'peer-reply-a',
+        payload: replyPayload
+      });
+      await new Promise(r => setTimeout(r, 100));
+
+      assert.ok(receivedReply, 'Bob should receive the relayed message with replyTo');
+      assert.strictEqual(receivedReply.text, 'I agree completely! 👍');
+      assert.ok(receivedReply.replyTo, 'Message must retain replyTo payload');
+      assert.strictEqual(receivedReply.replyTo.id, 'msg-orig-1');
+      assert.strictEqual(receivedReply.replyTo.senderName, 'Bob');
+
+      clientA.close();
+      clientB.close();
+    });
+
+    // 11. Emoji Message Reactions
+    await test('Emoji reaction updates message reactions, persists to storage, and broadcasts to room', async () => {
+      const clientA = await connectWebSocket(wsUrl);
+      const clientB = await connectWebSocket(wsUrl);
+      const roomId = 'ZEN-REAC';
+      let receivedReaction = null;
+
+      clientB.on('message', (raw) => {
+        const msg = JSON.parse(raw);
+        if (msg.type === 'message-reaction') {
+          receivedReaction = msg;
+        }
+      });
+
+      clientA.send({ type: 'join-room', roomId, peerId: 'peer-reac-a', name: 'Alice', browser: 'Zen' });
+      clientB.send({ type: 'join-room', roomId, peerId: 'peer-reac-b', name: 'Bob', browser: 'Brave' });
+      await new Promise(r => setTimeout(r, 80));
+
+      // Client A sends original message first
+      clientA.send({
+        type: 'relay-message',
+        roomId: roomId,
+        senderId: 'peer-reac-a',
+        payload: {
+          id: 'msg-target-react',
+          type: 'text',
+          text: 'Look at this awesome feature!'
+        }
+      });
+      await new Promise(r => setTimeout(r, 80));
+
+      // Bob reacts with 🔥 emoji
+      clientB.send({
+        type: 'relay-message',
+        roomId: roomId,
+        senderId: 'peer-reac-b',
+        payload: {
+          type: 'reaction',
+          targetMessageId: 'msg-target-react',
+          emoji: '🔥'
+        }
+      });
+      await new Promise(r => setTimeout(r, 100));
+
+      assert.ok(receivedReaction, 'Room peers should receive message-reaction broadcast');
+      assert.strictEqual(receivedReaction.targetMessageId, 'msg-target-react');
+      assert.strictEqual(receivedReaction.emoji, '🔥');
+      assert.ok(receivedReaction.reactions['🔥'], 'Reactions map must contain 🔥');
+      assert.ok(receivedReaction.reactions['🔥'].includes('Bob'), 'Reactions must record Bob');
+
+      clientA.close();
+      clientB.close();
+    });
+
   } finally {
     await app.close();
     if (fs.existsSync(testStoragePath)) {

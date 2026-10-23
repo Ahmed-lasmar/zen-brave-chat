@@ -613,6 +613,26 @@
 
       return fullMessage;
     }
+
+    sendReaction(targetMessageId, emoji) {
+      if (!this.roomId) {
+        throw new Error('Not connected to a room');
+      }
+      const reactionPayload = {
+        type: 'reaction',
+        targetMessageId: targetMessageId,
+        emoji: emoji,
+        senderId: this.peerId,
+        senderName: this.userName,
+        timestamp: Date.now()
+      };
+      return this._sendWs({
+        type: 'relay-message',
+        roomId: this.roomId,
+        senderId: this.peerId,
+        payload: reactionPayload
+      });
+    }
   }
 
   return ConnectionManager;
