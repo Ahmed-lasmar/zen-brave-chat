@@ -65,7 +65,7 @@ if (rawApi && rawApi.runtime && rawApi.runtime.onMessage) {
         try {
           rawApi.notifications.create(msg.id || `msg-${Date.now()}`, {
             type: 'basic',
-            iconUrl: (rawApi.runtime && rawApi.runtime.getURL('ui/icons/icon-128.png')) || '',
+            iconUrl: (rawApi.runtime && rawApi.runtime.getURL) ? rawApi.runtime.getURL('ui/icons/icon-128.png') : 'ui/icons/icon-128.png',
             title: title,
             message: body,
             priority: 2

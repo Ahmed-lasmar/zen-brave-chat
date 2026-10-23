@@ -26,6 +26,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -150,6 +151,9 @@ class MainActivity : AppCompatActivity(), RelayListener {
     override fun onResume() {
         super.onResume()
         isChatInForeground = true
+        try {
+            NotificationManagerCompat.from(this).cancelAll()
+        } catch (_: Exception) {}
     }
 
     override fun onPause() {
@@ -175,6 +179,9 @@ class MainActivity : AppCompatActivity(), RelayListener {
             val clean = targetRoom.trim().uppercase()
             if (client.currentRoomId != clean) {
                 joinTargetRoom(clean)
+            } else {
+                panelConnect.visibility = View.GONE
+                rvMessages.scrollToPosition(adapter.itemCount - 1)
             }
         }
     }

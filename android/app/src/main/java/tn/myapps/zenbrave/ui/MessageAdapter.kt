@@ -200,7 +200,7 @@ class MessageAdapter(
                     val intent = Intent(context, ImageViewerActivity::class.java).apply {
                         putExtra(ImageViewerActivity.EXTRA_IMAGE_DATA, rawData)
                         putExtra(ImageViewerActivity.EXTRA_IMAGE_NAME, msg.media?.name ?: "image.jpg")
-                        putExtra(ImageViewerActivity.EXTRA_SENDER, if (msg.isOutgoing) "You (Android)" else "${msg.senderName} (${msg.browser})")
+                        putExtra(ImageViewerActivity.EXTRA_SENDER, formatSender(msg))
                         putExtra(ImageViewerActivity.EXTRA_TIMESTAMP, msg.timestamp)
                     }
                     context.startActivity(intent)

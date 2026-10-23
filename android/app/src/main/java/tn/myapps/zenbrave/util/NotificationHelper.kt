@@ -119,7 +119,7 @@ object NotificationHelper {
 
         try {
             val manager = NotificationManagerCompat.from(context)
-            val notificationId = (roomId + message.id).hashCode()
+            val notificationId = (roomId + message.id).hashCode() and 0x7FFFFFFF
             manager.notify(notificationId, notification)
         } catch (_: SecurityException) {
             // Android 13+ permission not granted yet

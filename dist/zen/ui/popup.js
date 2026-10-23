@@ -299,7 +299,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     connection.on('peerLeft', (peer) => {
       showToast(`${peer.name || 'Friend'} left room`);
-      removePeerFromUI(peer.peerId);
+      removePeerFromUI(peer.peerId || peer.id);
     });
 
     connection.on('peerUpdated', ({ peer, oldName }) => {
@@ -330,13 +330,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Native notification when sidebar/side-panel is unfocused or minimized
         const isUnfocused = !document.hasFocus() || document.hidden;
         if (isUnfocused && settings.notificationsEnabled) {
-          BrowserAPI.runtime.sendMessage({
-            type: 'new-message',
-            message: message,
-            unfocused: true
-          });
+          let backgroundHandled = false;
+          try {
+            if (BrowserAPI.runtime && BrowserAPI.runtime.sendMessage) {
+              BrowserAPI.runtime.sendMessage({
+                type: 'new-message',
+                message: message,
+                unfocused: true
+              });
+              backgroundHandled = true;
+            }
+          } catch (_) {}
 
-          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          // Fallback to DOM Notification only if background service worker / notifications API is not handling it
+          if (!backgroundHandled && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             try {
               const title = message.senderName ? `${message.senderName}` : 'Zen & Brave Chat';
               let body = message.text || '';
