@@ -93,21 +93,22 @@ function createServer(options = {}) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         android: {
-          versionCode: 2,
-          versionName: '1.0.1',
-          releaseDate: '2026-10-22',
+          versionCode: 3,
+          versionName: '1.0.2',
+          releaseDate: '2026-10-23',
           apkSize: apkSize,
           downloadUrl: `${scheme}${host}/download/android`,
           changelog: [
+            'Fixed header merging with phone status bar, clock, and camera notch',
+            'Text area and input controls now follow the keyboard smoothly',
             'Interactive full-screen image viewer with pinch-to-zoom and pan',
             '1-tap save images to Gallery & share to other apps',
-            'In-app update check and 1-tap installation',
-            'Bug fixes for null text and link cards'
+            'In-app update check and 1-tap installation'
           ]
         },
         server: {
           name: 'Zen & Brave Link & Chat Relay',
-          version: '1.0.1',
+          version: '1.0.2',
           uptime: Math.round(process.uptime())
         }
       }, null, 2));

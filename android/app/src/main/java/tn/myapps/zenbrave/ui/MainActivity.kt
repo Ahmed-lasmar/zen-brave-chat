@@ -25,6 +25,10 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import tn.myapps.zenbrave.R
@@ -96,7 +100,14 @@ class MainActivity : AppCompatActivity(), RelayListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Configure edge-to-edge layout & light status bar icons
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
+
         setContentView(R.layout.activity_main)
+
+        setupWindowInsets()
 
         prefs = RoomPreferences(this)
         client = RelayWebSocketClient(this)
@@ -111,6 +122,54 @@ class MainActivity : AppCompatActivity(), RelayListener {
 
         // Background update check
         checkForUpdates(isUserInitiated = false)
+    }
+
+    private fun setupWindowInsets() {
+        val rootLayout = findViewById<View>(R.id.rootMainLayout)
+        val topBar = findViewById<View>(R.id.topBar)
+        val bottomBar = findViewById<View>(R.id.bottomBar)
+
+        val baseTopPadding = topBar.paddingTop
+        val baseBottomPadding = bottomBar.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, windowInsets ->
+            val statusBars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val navigationBars = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            val ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
+
+            // 1. Header (Fix merging with phone header, clock, battery, camera cutout)
+            topBar.setPadding(
+                topBar.paddingLeft,
+                statusBars.top + baseTopPadding,
+                topBar.paddingRight,
+                topBar.paddingBottom
+            )
+
+            // 2. Text Input Area (Follow keyboard when open, protect against nav bar when closed)
+            val bottomPadding = if (ime.bottom > 0) {
+                ime.bottom + baseBottomPadding
+            } else {
+                navigationBars.bottom + baseBottomPadding
+            }
+
+            bottomBar.setPadding(
+                bottomBar.paddingLeft,
+                bottomBar.paddingTop,
+                bottomBar.paddingRight,
+                bottomPadding
+            )
+
+            // Auto-scroll chat to latest message when keyboard pops up
+            if (ime.bottom > 0 && adapter.itemCount > 0) {
+                rvMessages.post {
+                    rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                }
+            }
+
+            windowInsets
+        }
     }
 
     private fun initViews() {
@@ -173,6 +232,22 @@ class MainActivity : AppCompatActivity(), RelayListener {
 
         btnSend.setOnClickListener {
             sendTextMessage()
+        }
+
+        etMessage.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus && adapter.itemCount > 0) {
+                rvMessages.postDelayed({
+                    rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                }, 200)
+            }
+        }
+
+        etMessage.setOnClickListener {
+            if (adapter.itemCount > 0) {
+                rvMessages.postDelayed({
+                    rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                }, 200)
+            }
         }
 
         btnAttachImage.setOnClickListener {

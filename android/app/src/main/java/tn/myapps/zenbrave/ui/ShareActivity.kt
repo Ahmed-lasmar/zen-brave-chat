@@ -24,6 +24,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import tn.myapps.zenbrave.R
 import tn.myapps.zenbrave.data.RoomPreferences
 import tn.myapps.zenbrave.model.ChatMessage
@@ -65,7 +68,19 @@ class ShareActivity : AppCompatActivity(), RelayListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_share)
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootContainer)) { view, insets ->
+            val status = insets.getInsets(
+                WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val bottomPadding = if (ime.bottom > 0) ime.bottom else nav.bottom
+            view.setPadding(view.paddingLeft, status.top + 16, view.paddingRight, bottomPadding + 16)
+            insets
+        }
 
         prefs = RoomPreferences(this)
         client = RelayWebSocketClient(this)

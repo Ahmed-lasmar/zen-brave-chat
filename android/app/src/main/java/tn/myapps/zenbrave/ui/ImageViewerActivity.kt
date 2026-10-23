@@ -24,6 +24,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import tn.myapps.zenbrave.R
 import java.io.File
 import java.io.FileOutputStream
@@ -55,7 +58,34 @@ class ImageViewerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_image_viewer)
+
+        val topBar = findViewById<View>(R.id.layoutViewerTopBar)
+        val bottomBar = findViewById<View>(R.id.layoutViewerBottomBar)
+        val baseTop = topBar.paddingTop
+        val baseBottom = bottomBar.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootImageViewer)) { _, insets ->
+            val status = insets.getInsets(
+                WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+
+            topBar.setPadding(
+                topBar.paddingLeft,
+                status.top + baseTop,
+                topBar.paddingRight,
+                topBar.paddingBottom
+            )
+            bottomBar.setPadding(
+                bottomBar.paddingLeft,
+                bottomBar.paddingTop,
+                bottomBar.paddingRight,
+                nav.bottom + baseBottom
+            )
+            insets
+        }
 
         ivFullPreview = findViewById(R.id.ivFullPreview)
         btnClose = findViewById(R.id.btnViewerClose)

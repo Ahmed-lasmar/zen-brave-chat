@@ -101,8 +101,8 @@ async function runTests() {
       assert.strictEqual(res.statusCode, 200);
       const data = JSON.parse(res.body.toString('utf8'));
       assert.ok(data.android, 'Response must have android version object');
-      assert.strictEqual(data.android.versionCode, 2, 'Version code should match build 2');
-      assert.strictEqual(data.android.versionName, '1.0.1', 'Version name should be 1.0.1');
+      assert.strictEqual(data.android.versionCode, 3, 'Version code should match build 3');
+      assert.strictEqual(data.android.versionName, '1.0.2', 'Version name should be 1.0.2');
       assert.ok(data.android.downloadUrl.includes('/download/android'), 'Must have direct APK downloadUrl');
       assert.ok(Array.isArray(data.android.changelog), 'Changelog must be array');
       assert.ok(data.android.changelog.length > 0, 'Changelog must not be empty');
@@ -114,7 +114,24 @@ async function runTests() {
       assert.strictEqual(resAlias2.statusCode, 200);
     });
 
-    // 7. AndroidManifest Intent Filters & Permissions Verification
+    // 7. Edge-to-Edge Status Bar Insets & Soft Keyboard Following
+    await test('MainActivity handles WindowInsets for status bar and soft keyboard', async () => {
+      const mainActivityPath = path.join(__dirname, '../android/app/src/main/java/tn/myapps/zenbrave/ui/MainActivity.kt');
+      assert.ok(fs.existsSync(mainActivityPath));
+      const code = fs.readFileSync(mainActivityPath, 'utf8');
+      assert.ok(code.includes('setupWindowInsets'), 'MainActivity must have setupWindowInsets');
+      assert.ok(code.includes('WindowInsetsCompat.Type.statusBars()'), 'Must handle statusBars insets');
+      assert.ok(code.includes('WindowInsetsCompat.Type.ime()'), 'Must handle IME soft keyboard insets');
+      assert.ok(code.includes('setOnApplyWindowInsetsListener'), 'Must use setOnApplyWindowInsetsListener');
+
+      const mainLayoutPath = path.join(__dirname, '../android/app/src/main/res/layout/activity_main.xml');
+      const layout = fs.readFileSync(mainLayoutPath, 'utf8');
+      assert.ok(layout.includes('android:id="@+id/rootMainLayout"'), 'Must have rootMainLayout ID');
+      assert.ok(layout.includes('android:id="@+id/topBar"'), 'Must have topBar ID');
+      assert.ok(layout.includes('android:id="@+id/bottomBar"'), 'Must have bottomBar ID');
+    });
+
+    // 8. AndroidManifest Intent Filters & Permissions Verification
     await test('AndroidManifest.xml contains SEND and SEND_MULTIPLE intent-filters and install permission', async () => {
       const manifestPath = path.join(__dirname, '../android/app/src/main/AndroidManifest.xml');
       assert.ok(fs.existsSync(manifestPath), 'AndroidManifest.xml should exist');
