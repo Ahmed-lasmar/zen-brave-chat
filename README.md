@@ -113,6 +113,17 @@ This produces:
 
 ### 🦊 Loading into Zen Browser
 
+#### Option A: Direct 1-Click Install (.xpi)
+1. In Zen Browser, navigate to `about:config` and click **"Accept the Risk and Continue"**.
+2. Search for:
+   ```
+   xpinstall.signatures.required
+   ```
+3. Toggle the value to `false` (this allows Zen to install self-hosted / offline `.xpi` add-ons).
+4. Download or open `https://zenbrave.myapps.tn/download/zen.xpi` (or `dist/zen.xpi`).
+5. When Zen prompts **"Add Zen & Brave Link & Chat?"**, click **Add** to install permanently.
+
+#### Option B: Developer Mode / Temporary Load
 1. Launch **Zen Browser**.
 2. Open a tab and navigate to:
    ```

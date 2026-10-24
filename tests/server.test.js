@@ -517,6 +517,22 @@ async function runTests() {
       assert.ok(multiXml.includes("<app appid='app-two'>"));
     });
 
+    // 18. Landing Page & Zen Config Instructions
+    await test('Landing page renders high-craft UI and Zen xpinstall.signatures.required configuration instructions', async () => {
+      const res = await httpGet('/', { 'Accept': 'text/html' });
+      assert.strictEqual(res.statusCode, 200);
+      assert.ok(res.headers['content-type'].includes('text/html'));
+      const html = res.body.toString('utf8');
+      assert.ok(html.includes('xpinstall.signatures.required'), 'Landing page must document xpinstall.signatures.required for Zen');
+      assert.ok(html.includes('about:config'), 'Landing page must document about:config');
+      assert.ok(html.includes('/download/zen.xpi'), 'Landing page must link to /download/zen.xpi');
+      assert.ok(html.includes('/download/brave.crx'), 'Landing page must link to /download/brave.crx');
+      assert.ok(html.includes('/download/android'), 'Landing page must link to /download/android');
+      assert.ok(html.includes('btn-zen'), 'Must include .btn-zen styling');
+      assert.ok(html.includes('btn-brave'), 'Must include .btn-brave styling');
+      assert.ok(html.includes('btn-android'), 'Must include .btn-android styling');
+    });
+
   } finally {
     await app.close();
     if (fs.existsSync(testStoragePath)) {
