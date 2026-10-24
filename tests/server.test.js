@@ -531,6 +531,12 @@ async function runTests() {
       assert.ok(html.includes('btn-zen'), 'Must include .btn-zen styling');
       assert.ok(html.includes('btn-brave'), 'Must include .btn-brave styling');
       assert.ok(html.includes('btn-android'), 'Must include .btn-android styling');
+      assert.ok(html.includes('btn-copy'), 'Must include interactive copy buttons');
+      assert.ok(html.includes('copyPreference'), 'Must include copyPreference handler with inline feedback');
+      assert.ok(html.includes('process-section'), 'Must include connected process workflow section');
+      assert.ok(html.includes('bento-grid'), 'Must include bento grid capabilities showcase');
+      assert.ok(html.includes('role="banner"') && html.includes('role="main"') && html.includes('role="contentinfo"'), 'Must include HTML5 semantic landmarks');
+      assert.ok(html.includes('prefers-reduced-motion'), 'Must support prefers-reduced-motion');
     });
 
   } finally {
