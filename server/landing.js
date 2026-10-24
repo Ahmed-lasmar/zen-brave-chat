@@ -276,15 +276,20 @@ function renderLandingPage(wsEndpoint, stats = {}) {
             </div>
           </div>
           <ul class="steps">
-            <li><span class="step-num">1</span> Download & extract the zip file</li>
-            <li><span class="step-num">2</span> Open <code>brave://extensions</code></li>
-            <li><span class="step-num">3</span> Toggle <strong>"Developer mode"</strong> ON, click <strong>"Load unpacked"</strong> & select folder</li>
+            <li><span class="step-num">1</span> Download the signed <code>.crx</code> package (or zip)</li>
+            <li><span class="step-num">2</span> Open <code>brave://extensions</code> &amp; toggle <strong>Developer mode</strong> ON</li>
+            <li><span class="step-num">3</span> Drag &amp; drop <code>zen-brave-chat.crx</code> to install, or load unpacked zip</li>
           </ul>
         </div>
-        <a href="/download/brave" class="btn btn-brave">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Download for Brave (.zip)
-        </a>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <a href="/download/brave.crx" class="btn btn-brave">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Download Signed CRX (.crx)
+          </a>
+          <a href="/download/brave" style="text-align: center; font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 4px;">
+            or download offline .zip archive
+          </a>
+        </div>
       </div>
 
       <!-- Android Card -->
